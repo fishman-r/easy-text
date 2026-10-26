@@ -1,3 +1,4 @@
+import { normalizeLocalePreference } from "./i18n.js";
 import { validSession } from "./core.js";
 import { normalizeText } from "./text-tools.js";
 
@@ -16,6 +17,9 @@ export function normalizeSettings(input = {}) {
   settings.indentSize = [2, 4, 8].includes(settings.indentSize)
     ? settings.indentSize
     : 4;
+  settings.languagePreference = normalizeLocalePreference(
+    settings.languagePreference,
+  );
   settings.wrap = settings.wrap === true;
   settings.light = settings.light === true;
   if (!settings.bookmarks || typeof settings.bookmarks !== "object")

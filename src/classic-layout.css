@@ -48,3 +48,8 @@
 .plugin-panel details { margin: 10px 0; font-size: 11px; }
 .plugin-command { margin: 3px; }
 #plugin-output { max-height: 180px; overflow: auto; }
+#language-dialog { width: min(460px, 90vw); }
+#language-preference { width: 100%; padding: 8px 10px; color: #e5e9dc; background: #24291e; border: 1px solid #7c8769; }
+.plugin-compatibility { margin: 8px 0; font-size: 11px; line-height: 1.6; }
+.plugin-compatibility dt { color: #d7e1c9; margin-top: 7px; }
+.plugin-compatibility dd { margin: 2px 0 0; color: #b5c2a5; }

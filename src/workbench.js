@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 import { buildDiagnostics } from "./build-diagnostics.js";
 import { dirty } from "./core.js";
 import { syntaxSymbols, localDefinition } from "./syntax-navigation.js";
@@ -34,15 +35,15 @@ export function createWorkbench(ctx) {
   if (Array.isArray(previous)) recorder.events = previous;
   let snippets = readSetting("easy-text-snippets", [
     {
-      name: "JavaScript function",
+      name: t("snippetJavaScriptFunction"),
       body: "function ${1:name}(${2:args}) {\n  ${3:// code}\n}",
     },
     {
-      name: "Python function",
+      name: t("snippetPythonFunction"),
       body: "def ${1:name}(${2:args}):\n    ${3:pass}",
     },
     {
-      name: "HTML element",
+      name: t("snippetHTMLElement"),
       body: '<${1:div} class="${2:className}">\n  ${3:content}\n</${1:div}>',
     },
   ]);
@@ -557,7 +558,7 @@ export function createWorkbench(ctx) {
           ctx.toast("正在录制当前编辑操作；再次执行命令停止");
         }
         document.querySelector(".status-logo").textContent = recorder.recording
-          ? "● REC"
+          ? "● " + t("macroRecording")
           : "ET";
       },
     ],

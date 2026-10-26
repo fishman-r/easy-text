@@ -1,3 +1,11 @@
+import {
+  t,
+  codeMirrorPhrases,
+  resolveLocale,
+  normalizeLocalePreference,
+  DEFAULT_LOCALE,
+  localeLabel,
+} from "./i18n.js";
 import { selectionsByLine } from "./selection-tools.js";
 import { createPluginController } from "./plugins.js";
 import {
@@ -109,6 +117,11 @@ let files = restored?.files || initial;
 let active = restored?.active || files[0].id;
 let tabs = restored?.tabs || files.map((file) => file.id);
 let settings = restored?.settings || normalizeSettings();
+let localeInfo = {
+  locale: DEFAULT_LOCALE,
+  preference: settings.languagePreference,
+  systemLocale: navigator.language || "",
+};
 paneFiles = restored?.paneFiles || [active, active];
 workspace = restored?.workspace || null;
 let views = [],
@@ -295,11 +308,15 @@ function createState(f) {
     wrap: new Compartment(),
     lang: new Compartment(),
     indent: new Compartment(),
+    locale: new Compartment(),
   };
   const state = EditorState.create({
     doc: f.content,
     extensions: [
       basicSetup,
+      config.locale.of(
+        EditorState.phrases.of(codeMirrorPhrases(localeInfo.locale)),
+      ),
       EditorState.allowMultipleSelections.of(true),
       config.indent.of([
         indentUnit.of(
@@ -544,7 +561,16 @@ function status(view = focused) {
   const pos = selection.main.head;
   const line = view.state.doc.lineAt(pos);
   document.querySelector("#cursor").textContent =
-    `Line ${line.number}, Column ${pos - line.from + 1}${selection.ranges.length > 1 ? " · " + selection.ranges.length + " 个光标" : ""}${selection.main.empty ? "" : " · 已选 " + (selection.main.to - selection.main.from) + " 字符"}`;
+    t("lineColumn", { line: line.number, column: pos - line.from + 1 }) +
+    (selection.ranges.length > 1
+      ? " · " + t("cursorCount", { count: selection.ranges.length })
+      : "") +
+    (selection.main.empty
+      ? ""
+      : " · " +
+        t("selectionCount", {
+          count: selection.main.to - selection.main.from,
+        }));
   document.querySelector("#language").textContent = languageName(
     current().name,
   );
@@ -554,8 +580,9 @@ function status(view = focused) {
   ).toUpperCase();
   document.querySelector("#line-ending").textContent =
     current().lineEnding || "LF";
-  document.querySelector("#indent-status").textContent =
-    "Tab Size: " + effectiveSettings(current()).indentSize;
+  document.querySelector("#indent-status").textContent = t("tabSize", {
+    size: effectiveSettings(current()).indentSize,
+  });
   document.title = current().name.split("/").pop() + " — easy text";
 }
 function closeTab(id) {
@@ -826,6 +853,9 @@ function reconfigure() {
     entry.state = entry.state.update({
       effects: [
         entry.config.theme.reconfigure(editorTheme(localSettings)),
+        entry.config.locale.reconfigure(
+          EditorState.phrases.of(codeMirrorPhrases(localeInfo.locale)),
+        ),
         entry.config.indent.reconfigure([
           indentUnit.of(
             localSettings.useTabs ? "\t" : " ".repeat(localSettings.indentSize),
@@ -1112,12 +1142,67 @@ function workspaceMatches(query) {
   }
   return results;
 }
+function updateLocaleInfo(info) {
+  const preference = normalizeLocalePreference(
+    info?.preference ?? settings.languagePreference,
+  );
+  localeInfo = {
+    ...localeInfo,
+    ...info,
+    preference,
+    locale: resolveLocale(
+      preference,
+      info?.systemLocale || localeInfo.systemLocale,
+    ),
+  };
+  settings.languagePreference = preference;
+  document.documentElement.lang = localeInfo.locale;
+  const target = document.querySelector("#language-system-info");
+  if (target)
+    target.textContent = t("languageSystemInfo", {
+      systemLocale: localeInfo.systemLocale || "—",
+      language: localeLabel(localeInfo.locale),
+    });
+}
+async function openLanguageDialog() {
+  if (native?.getLocaleInfo) {
+    try {
+      updateLocaleInfo(await native.getLocaleInfo());
+    } catch (error) {
+      toast(t("languageFailed", { message: error.message }));
+    }
+  }
+  document.querySelector("#language-preference").value =
+    settings.languagePreference;
+  updateLocaleInfo(localeInfo);
+  document.querySelector("#language-dialog").showModal();
+}
 function showHelp() {
   document.querySelector("#help").showModal();
 }
 
 document.querySelector("#app").innerHTML = renderShell();
 document.body.classList.toggle("desktop", Boolean(native));
+document.documentElement.lang = localeInfo.locale;
+document
+  .querySelector("#language-form")
+  .addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const preference = normalizeLocalePreference(
+      document.querySelector("#language-preference").value,
+    );
+    try {
+      const info = native?.setLocale
+        ? await native.setLocale({ locale: preference })
+        : { ...localeInfo, preference };
+      updateLocaleInfo(info);
+      persist();
+      document.querySelector("#language-dialog").close();
+      toast(t("languageSaved"));
+    } catch (error) {
+      toast(t("languageFailed", { message: error.message }));
+    }
+  });
 
 document.addEventListener("click", (e) => {
   const b = e.target.closest("button");
@@ -1146,7 +1231,7 @@ document.addEventListener("click", (e) => {
       const host = document.querySelector("#open-files");
       host.hidden = !host.hidden;
       b.setAttribute("aria-expanded", String(!host.hidden));
-      b.textContent = "OPEN FILES";
+      b.textContent = t("openFiles");
     },
     toggleFolders: () => {
       const host = document.querySelector("#tree");
@@ -1345,6 +1430,7 @@ workbench = createWorkbench({
 });
 commands.push(
   ...workbench.commands,
+  ["language.configure", t("languageCommand"), "", openLanguageDialog],
   ["file.close", "关闭当前标签", "⌘ W", () => closeTab(active)],
   [
     "selection.split",
@@ -1647,6 +1733,10 @@ installMenus(() => commands, toast);
 if (native) {
   document.title = current().name.split("/").pop() + " — easy text";
   native.onEvent(async (event) => {
+    if (event.type === "locale-changed") {
+      updateLocaleInfo(event);
+      persist();
+    }
     if (event.type === "menu-command") {
       const command = commands.find((command) => command[0] === event.command);
       if (command)
@@ -1736,6 +1826,16 @@ if (native) {
     .catch((error) => toast("恢复本机会话失败：" + error.message))
     .finally(() => {
       nativeSessionReady = true;
+      if (native.getLocaleInfo)
+        native
+          .getLocaleInfo()
+          .then((info) => {
+            updateLocaleInfo(info);
+            persist();
+          })
+          .catch((error) =>
+            toast(t("languageFailed", { message: error.message })),
+          );
       persist();
     });
 }

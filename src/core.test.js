@@ -484,3 +484,110 @@ test("folder inventory relative names are displayed once at their hierarchy leve
   assert.equal(nodes[1].name, "a.js");
   assert.equal(nodes[1].key, "src/a.js");
 });
+
+import {
+  t,
+  codeMirrorPhrases,
+  resolveLocale,
+  normalizeLocalePreference,
+  SUPPORTED_LOCALES,
+  localeLabel,
+} from "./i18n.js";
+import chinesePack from "./locales/zh-CN.json" with { type: "json" };
+import englishPack from "./locales/en.json" with { type: "json" };
+import { renderShell } from "./shell.js";
+test("Chinese language pack covers actual CodeMirror phrases including case and interpolation", () => {
+  const required = [
+    "Find",
+    "Replace",
+    "next",
+    "previous",
+    "all",
+    "match case",
+    "regexp",
+    "by word",
+    "replace",
+    "replace all",
+    "close",
+    "current match",
+    "on line",
+    "replaced match on line $",
+    "replaced $ matches",
+    "Go to line",
+    "go",
+    "Folded lines",
+    "Unfolded lines",
+    "to",
+    "folded code",
+    "unfold",
+    "Fold line",
+    "Unfold line",
+    "Completions",
+    "Control character",
+    "Selection deleted",
+  ];
+  const phrases = codeMirrorPhrases();
+  for (const key of required) {
+    assert.equal(typeof phrases[key], "string", key);
+    assert.notEqual(phrases[key], key, key);
+    assert.equal(
+      (phrases[key].match(/\$/g) || []).length,
+      (key.match(/\$/g) || []).length,
+      key,
+    );
+  }
+  const state = EditorState.create({
+    extensions: [EditorState.phrases.of(phrases)],
+  });
+  assert.equal(state.phrase("Find"), "查找");
+  assert.equal(state.phrase("replace all"), "全部替换");
+  assert.equal(state.phrase("replaced $ matches", 7), "已替换 7 处匹配");
+  assert.equal(
+    state.phrase("replaced match on line $", 12),
+    "已替换第 12 行的匹配",
+  );
+});
+test("Chinese is the only complete UI pack and unsupported system languages fall back to it", () => {
+  assert.deepEqual(SUPPORTED_LOCALES, ["zh-CN"]);
+  assert.equal(resolveLocale("system", "en-US"), "zh-CN");
+  assert.equal(resolveLocale("system", "zh-HK"), "zh-CN");
+  assert.equal(normalizeLocalePreference("en"), "zh-CN");
+  assert.equal(normalizeLocalePreference("system"), "system");
+  assert.equal(localeLabel(), "简体中文");
+});
+test("locale resources have matching UI keys and status placeholders render from the pack", () => {
+  assert.equal(chinesePack.schemaVersion, 1);
+  assert.deepEqual(
+    Object.keys(chinesePack.ui).sort(),
+    Object.keys(englishPack.ui).sort(),
+  );
+  assert.equal(t("lineColumn", { line: 12, column: 3 }), "第 12 行，第 3 列");
+  assert.equal(t("tabSize", { size: 4 }), "缩进宽度：4");
+  assert.equal(t("selectionCount", { count: 9 }), "已选择 9 个字符");
+});
+test("shell starts in Chinese and does not advertise a partial English interface", () => {
+  const html = renderShell();
+  assert.ok(html.includes("已打开文件"));
+  assert.ok(html.includes("文件夹"));
+  assert.ok(html.includes("缩进宽度：4"));
+  assert.ok(!html.includes("OPEN FILES"));
+  assert.ok(!html.includes("FOLDERS"));
+  assert.ok(!html.includes('value="en"'));
+  assert.ok(html.includes('value="system"'));
+  assert.ok(html.includes('value="zh-CN"'));
+});
+test("locale preference survives session restore and cannot select an unsupported pack", () => {
+  const file = { id: "a", name: "a.txt", content: "text", saved: "text" };
+  assert.equal(
+    restoreSession({
+      files: [file],
+      settings: { languagePreference: "system" },
+    }).settings.languagePreference,
+    "system",
+  );
+  assert.equal(
+    restoreSession({ files: [file], settings: { languagePreference: "en" } })
+      .settings.languagePreference,
+    "zh-CN",
+  );
+});

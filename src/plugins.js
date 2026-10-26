@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 import { validatePluginEffects } from "./plugin-transactions.js";
 const escapeHTML = (value) =>
   String(value).replace(
@@ -38,7 +39,7 @@ export function createPluginController(ctx) {
       for (const command of state.commands || []) {
         commands.push([
           "plugin:" + command.name,
-          `${command.package || "Plugin"}: ${command.name.replaceAll("_", " ")}`,
+          `${command.package || t("pluginFallback")}: ${command.name.replaceAll("_", " ")}`,
           "",
           () => run(command.name, {}),
         ]);
@@ -149,9 +150,16 @@ export function createPluginController(ctx) {
     );
     return Promise.resolve();
   }
+  function compatibilityDetails() {
+    const raw =
+      typeof state.compatibility === "string"
+        ? state.compatibility
+        : JSON.stringify(state.compatibility || {}, null, 2);
+    return `<dl class="plugin-compatibility"><dt>${t("pluginCompatibilityBaseline")}</dt><dd>${t("pluginCompatibilityBaselineValue")}</dd><dt>${t("pluginCompatibilityOffsets")}</dt><dd>${t("pluginCompatibilityOffsetsValue")}</dd><dt>${t("pluginCompatibilityUnsupported")}</dt><dd>${t("pluginCompatibilityUnsupportedValue")}</dd></dl><details><summary>${t("pluginCompatibilityTechnicalDetails")}</summary><pre>${escapeHTML(raw)}</pre></details>`;
+  }
   function render() {
     const sources = state.sources || [];
-    panel.innerHTML = `<div class="workbench-heading"><strong>插件管理</strong><span>${state.running ? "Python 宿主运行中" : "Python 宿主已停止"}</span><button data-plugin-action="close" aria-label="关闭插件管理">×</button></div><div class="workbench-body"><p class="panel-note plugin-trust">本地 Python 插件以当前用户权限运行，可读取文件或联网。仅加载你信任的代码。支持 Sublime Python API 的已实现子集；不保证任意插件兼容。不自动加载现有 Sublime 目录，重启后需显式启动。</p>${available ? `<div class="plugin-toolbar"><button data-plugin-action="install" data-kind="packages">添加 Packages 目录</button><button data-plugin-action="install" data-kind="archive">安装 .sublime-package</button><button data-plugin-action="install" data-kind="python">安装 .py 插件</button><button data-plugin-action="start">启动 / 重新加载</button><button data-plugin-action="stop">停止</button><button data-plugin-action="refresh">刷新</button></div><div class="plugin-sources">${sources.map((source) => `<div class="plugin-source"><div><strong>${escapeHTML(source.name || source.id)}</strong><small>${escapeHTML(source.path || "")}</small></div><button data-plugin-action="toggle" data-source="${escapeHTML(source.id)}">${source.enabled ? "禁用" : "启用"}</button><button data-plugin-action="remove" data-source="${escapeHTML(source.id)}">移除登记</button></div>`).join("") || '<p class="panel-note">尚未登记任何插件。安装入口会显示原生路径选择与信任确认。</p>'}</div><details><summary>兼容性与已注册命令（${(state.commands || []).length}）</summary><pre>${escapeHTML(typeof state.compatibility === "string" ? state.compatibility : JSON.stringify(state.compatibility || {}, null, 2))}</pre><div>${(state.commands || []).map((command) => `<button class="plugin-command" data-plugin-action="run" data-command="${escapeHTML(command.name)}">${escapeHTML(command.package || "Plugin")}: ${escapeHTML(command.name)}</button>`).join("")}</div></details>` : '<p class="panel-note">插件宿主需要 easy text 桌面版。浏览器版不会执行本机 Python。</p>'}<details open><summary>插件输出与错误</summary><pre id="plugin-output"></pre></details></div>`;
+    panel.innerHTML = `<div class="workbench-heading"><strong>插件管理</strong><span>${state.running ? "Python 宿主运行中" : "Python 宿主已停止"}</span><button data-plugin-action="close" aria-label="关闭插件管理">×</button></div><div class="workbench-body"><p class="panel-note plugin-trust">本地 Python 插件以当前用户权限运行，可读取文件或联网。仅加载你信任的代码。支持 Sublime Python API 的已实现子集；不保证任意插件兼容。不自动加载现有 Sublime 目录，重启后需显式启动。</p>${available ? `<div class="plugin-toolbar"><button data-plugin-action="install" data-kind="packages">添加 Packages 目录</button><button data-plugin-action="install" data-kind="archive">安装 .sublime-package</button><button data-plugin-action="install" data-kind="python">安装 .py 插件</button><button data-plugin-action="start">启动 / 重新加载</button><button data-plugin-action="stop">停止</button><button data-plugin-action="refresh">刷新</button></div><div class="plugin-sources">${sources.map((source) => `<div class="plugin-source"><div><strong>${escapeHTML(source.name || source.id)}</strong><small>${escapeHTML(source.path || "")}</small></div><button data-plugin-action="toggle" data-source="${escapeHTML(source.id)}">${source.enabled ? "禁用" : "启用"}</button><button data-plugin-action="remove" data-source="${escapeHTML(source.id)}">移除登记</button></div>`).join("") || '<p class="panel-note">尚未登记任何插件。安装入口会显示原生路径选择与信任确认。</p>'}</div><details><summary>兼容性与已注册命令（${(state.commands || []).length}）</summary>${compatibilityDetails()}<div>${(state.commands || []).map((command) => `<button class="plugin-command" data-plugin-action="run" data-command="${escapeHTML(command.name)}">${escapeHTML(command.package || t("pluginFallback"))}: ${escapeHTML(command.name)}</button>`).join("")}</div></details>` : '<p class="panel-note">插件宿主需要 easy text 桌面版。浏览器版不会执行本机 Python。</p>'}<details open><summary>插件输出与错误</summary><pre id="plugin-output"></pre></details></div>`;
     panel.querySelector("#plugin-output").textContent = [
       ...log,
       ...(state.errors || []).map((error) =>
