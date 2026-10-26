@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.DS_Store
+dist-desktop/
+.desktop-stage/
+desktop-tests/smoke-data/
+desktop-tests/latest-test-results.txt
+desktop-tests/package-manifest.json
+Forge.html
+__pycache__/
+*.py[cod]
+.venv/
+*.log
