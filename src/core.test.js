@@ -536,3 +536,8 @@ test("locale preference survives session restore and cannot select an unsupporte
     "zh-CN",
   );
 });
+
+test("folder tree excludes unsaved memory buffers but includes saved paths", () => {
+  const nodes = folderNodes([{id:"draft",name:"untitled",memoryOnly:true},{id:"saved",name:"saved.txt",memoryOnly:false,path:"/p/saved.txt"}], [], null);
+  assert.deepEqual(nodes.map(node => node.loadedId), ["saved"]);
+});

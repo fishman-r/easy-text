@@ -31,6 +31,7 @@ export function folderNodes(files, diskTree, workspace, query = "") {
     });
   }
   for (const file of files) {
+    if (file.memoryOnly && !file.path) continue;
     if (rootPath && (!file.path || !file.path.startsWith(rootPath + "/")))
       continue;
     const relative = rootPath

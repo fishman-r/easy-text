@@ -20,3 +20,19 @@ test('dispose kills a SIGTERM-resistant process group before returning',async t=
 test('concurrent session saves preserve request ordering',async t=>{const {service}=await setup(t);await Promise.all([service.saveSession({data:{value:'old'.repeat(1000000)}}),service.saveSession({data:{value:'new'}})]);assert.equal((await service.loadSession()).data.value,'new');});
 test('Save As preserves UTF16 encoding for new and explicitly overwritten targets',async t=>{const {root,service}=await setup(t);const p=path.join(root,'save-as.txt');const f=await service.saveAsPath(p,{content:'甲\n乙',lineEnding:'CRLF',encoding:'utf-16be',bom:true});assert.equal(f.encoding,'utf-16be');await service.saveAsPath(p,{content:'丙',encoding:'utf-16le',bom:true});assert.deepEqual(await fs.readFile(p),encode('丙','LF',true,'utf-16le'));});
 test('a change after initial revision check is caught before replacement',async t=>{const {root,service}=await setup(t);const p=path.join(root,'race.txt');await fs.writeFile(p,'baseline');const f=await service.readFile({path:p});const original=service.bytes.bind(service);let calls=0;service.bytes=async target=>{calls++;if(calls===2)await fs.writeFile(p,'external-during-save');return original(target);};await assert.rejects(service.saveFile({...f,content:'editor'}),/CONFLICT/);assert.equal(await fs.readFile(p,'utf8'),'external-during-save');assert.equal((await fs.readdir(root)).some(name=>name.startsWith('.et-save-')),false);});
+
+test('reveal authorization accepts granted folders and individual files without granting their parent',async t=>{
+ const {base,root,service}=await setup(t);
+ assert.equal(await service.authorized(root),await fs.realpath(root));
+ const nested=path.join(root,'nested');await fs.mkdir(nested);
+ assert.equal(await service.authorized(nested),await fs.realpath(nested));
+ const selected=path.join(base,'selected.txt');await fs.writeFile(selected,'selected');
+ await service.grantFile(selected);
+ assert.equal(await service.authorized(selected),await fs.realpath(selected));
+ await assert.rejects(service.authorized(base),/DENIED/);
+ await assert.rejects(service.authorized('untitled'),/PATH/);
+ await assert.rejects(service.authorized(path.join(root,'missing.txt')),/ENOENT/);
+ const outside=path.join(base,'outside');await fs.mkdir(outside);
+ await fs.symlink(outside,path.join(root,'escape-folder'));
+ await assert.rejects(service.authorized(path.join(root,'escape-folder')),/DENIED/);
+});

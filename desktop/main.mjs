@@ -1,4 +1,4 @@
-import {app,BrowserWindow,ipcMain,dialog,Menu,session,clipboard} from 'electron';
+import {app,BrowserWindow,ipcMain,dialog,Menu,session,clipboard,shell} from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import {fileURLToPath,pathToFileURL} from 'node:url';
@@ -25,6 +25,7 @@ const handlers={
  openFolder:async()=>{const r=await dialog.showOpenDialog(window,{properties:['openDirectory'],title:tr('Open project folder'),message:tr('Choose a project folder'),buttonLabel:tr('Open')});return r.canceled?null:service.grantFolder(r.filePaths[0]);},
  saveAs:async(args)=>{const r=await dialog.showSaveDialog(window,{title:tr('Save file as'),message:tr('Save file as'),buttonLabel:tr('Save'),nameFieldLabel:tr('File name:'),defaultPath:path.basename(args?.suggestedName||args?.name||'untitled.txt'),properties:['showOverwriteConfirmation']});return r.canceled?null:service.saveAsPath(r.filePath,args);},
 };handlers.openProject=handlers.openFolder;
+handlers.revealPath=async({path:p}={})=>{const authorized=await service.authorized(p);shell.showItemInFolder(authorized);return{path:authorized};};
 handlers.getLocaleInfo=()=>locale.info();handlers.setLocale=async args=>{const info=await locale.set(args);rebuildMenu();window?.webContents.send('et:event',{type:'locale-changed',...info});return info;};
 handlers.pluginList=()=>plugins.list();handlers.pluginStart=()=>plugins.start();handlers.pluginStop=()=>plugins.stop();handlers.pluginEnable=args=>plugins.enable(args);handlers.pluginRemove=args=>plugins.remove(args);handlers.pluginRun=args=>plugins.run(args);handlers.pluginEvent=args=>plugins.event(args);handlers.pluginSetClipboard=({text})=>{if(typeof text!=='string'||text.length>1048576)throw Error('Clipboard text exceeds 1 MiB.');clipboard.writeText(text);return{};};handlers.pluginInstall=async({kind='archive'}={})=>{if(!['packages','archive','python'].includes(kind))throw Error('Unknown plugin source type');const result=await dialog.showOpenDialog(window,{title:tr(kind==='packages'?'Choose a trusted Packages folder':'Install a trusted Python plugin'),message:tr('Choose only plugin code you trust'),buttonLabel:tr('Select'),properties:[kind==='packages'?'openDirectory':'openFile'],...(kind==='packages'?{}:{filters:[{name:tr(kind==='archive'?'Sublime Package':'Python Plugin'),extensions:[kind==='archive'?'sublime-package':'py']}]})});return result.canceled?plugins.list():plugins.install(result.filePaths[0],kind);};
 handlers.closePending=async()=>{closeGeneration++;return{};};

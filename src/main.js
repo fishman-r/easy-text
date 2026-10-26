@@ -1,3 +1,4 @@
+import { showFileContextMenu } from "./file-context-menu.js";
 import { createMemoryBuffer, durableSession } from "./memory-buffer.js";
 import { createPreferences } from "./preferences.js";
 import { installAppDialogs } from "./dialogs.js";
@@ -552,7 +553,13 @@ function renderOpenFiles() {
 function renderTree() {
   const query = document.querySelector("#tree-filter").value;
   const collapsed = new Set(settings.collapsedFolders || []);
-  const nodes = folderNodes(files, diskTree, workspace, query);
+  const nodes = native && !workspace ? [] : folderNodes(files, diskTree, workspace, query);
+  const heading = document.querySelector(".project-heading span");
+  heading.textContent = workspace?.name || (native ? "未打开文件夹" : "导入的文件");
+  const pathLabel = document.querySelector("#workspace-path");
+  pathLabel.textContent = workspace?.path || (native ? "打开文件夹以浏览磁盘目录" : "浏览器无法获取磁盘绝对路径");
+  pathLabel.title = workspace?.path || "";
+  document.querySelector("#current-file-path").textContent = current().path || "当前文档尚无磁盘路径";
   document.querySelector("#file-count").textContent = files.length + " 个文件";
   document.querySelector("#tree").innerHTML =
     nodes
@@ -566,7 +573,7 @@ function renderTree() {
         const file = files.find((file) => file.id === node.loadedId);
         return `<button class="tree-file ${node.loadedId === active ? "selected" : ""}" ${node.loadedId ? `data-file="${esc(node.loadedId)}"` : `data-path="${esc(node.path)}"`} style="--depth:${node.depth}" title="${esc(node.path || node.key)}"><span class="tree-disclosure"></span><span class="document-icon">▱</span><span>${esc(node.name)}</span>${file && dirty(file) ? "<b>●</b>" : ""}</button>`;
       })
-      .join("") || '<div class="empty">没有文件</div>';
+      .join("") || '<div class="empty">' + (native && !workspace ? '尚未打开磁盘文件夹' : '没有文件') + '</div>';
   renderOpenFiles();
 }
 
@@ -1236,6 +1243,27 @@ document
     }
   });
 
+document.addEventListener("contextmenu", event => {
+  const row = event.target.closest("#open-files [data-file], #tabs [data-file], #tree [data-file], #tree [data-path], #tree [data-directory], .project-heading, #workspace-path");
+  if (!row) return;
+  event.preventDefault();
+  const f = files.find(file => file.id === row.dataset.file);
+  const directory = row.hasAttribute("data-directory") || row.matches(".project-heading, #workspace-path");
+  const path = directory ? (row.dataset.directory ? diskTree.find(entry => entry.kind === "directory" && (entry.path === workspace?.path + "/" + row.dataset.directory))?.path : workspace?.path) : (f?.path || row.dataset.path);
+  const select = async () => { if (f) activate(f.id); else if (path && !directory) await openPath(path); };
+  const copy = async value => { if (native) await native.pluginSetClipboard({text:value}); else await navigator.clipboard.writeText(value); toast("已复制路径"); };
+  const items = directory ? [{label:"打开文件夹…",action:openProject}] : [
+    {label:"打开",action:select},
+    {label:"保存",action:async () => { await select(); await save(); }},
+    {label:"另存为…",action:async () => { await select(); await save(true); }},
+    {label:"重命名…",action:async () => { await select(); rename(); }},
+  ];
+  items.push({label:path ? "复制完整路径" : "尚未保存，无磁盘路径",disabled:!path,action:() => copy(path)});
+  if (path && workspace?.path && path.startsWith(workspace.path + "/")) items.push({label:"复制相对路径",action:() => copy(path.slice(workspace.path.length + 1))});
+  if (native) items.push({label:"在访达中显示",disabled:!path,action:() => native.revealPath({path})});
+  if (f && tabs.includes(f.id)) items.push({label:"关闭",action:() => closeTab(f.id)});
+  showFileContextMenu(event, items, toast);
+});
 document.querySelector(".tab-bar").addEventListener("dblclick", (event) => {
   if (event.target.matches("#tabs, .tab-bar")) { event.preventDefault(); newFile(); }
 });
