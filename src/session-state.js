@@ -15,7 +15,7 @@ export function normalizeSettings(input = {}) {
   );
   settings.indentSize = [2, 4, 8].includes(settings.indentSize)
     ? settings.indentSize
-    : 2;
+    : 4;
   settings.wrap = settings.wrap === true;
   settings.light = settings.light === true;
   if (!settings.bookmarks || typeof settings.bookmarks !== "object")

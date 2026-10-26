@@ -98,6 +98,9 @@ export function createWorkbench(ctx) {
     }
   });
   function show(name, body, actions = {}) {
+    document.querySelectorAll("main > .workbench-panel").forEach((other) => {
+      if (other !== panel) other.classList.add("hidden");
+    });
     panelName = name;
     panelActions = actions;
     panel.classList.remove("hidden");

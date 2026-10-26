@@ -58,3 +58,43 @@ Verified on this host: the packaged executable is Mach-O ARM64, and an actual pa
 The primary agent subsequently reported passing native UI checks in an isolated QA session: folder-open dialog; three-cursor editing with undo/redo and original-path save; byte-for-byte UTF-16LE BOM/CRLF save; external-change rejection followed by Save As and a later save; project replacement preview/apply/undo; actual build stdout and exit code 0; Cmd-Q session flush retaining an unsaved Chinese draft, with no hanging process. These checks were performed by the primary agent rather than inferred from the backend unit tests. Final packaging follows the last renderer fixes.
 
 The primary agent's second native UI pass also confirmed restored session/pane state, format-only dirty tracking and persistence, suppression of self-generated external-change warnings, and clicking a build diagnostic to navigate to its source location. The application was quit before the final package refresh. Installation into the user's Applications directory is handled separately by the primary agent; this subagent does not replace an installed application.
+
+# Version 0.3: Python plugin compatibility host
+
+This is a working, independently implemented **Sublime Text 3 API subset**, not a claim that all Sublime plugins are compatible. No Sublime application source or Default package is included in the application. The optional regression test reads three files from an existing local Sublime installation only during testing, creates a temporary test archive, and removes it afterward. CI skips that test when Sublime is absent.
+
+## Runtime and trust
+
+The main process launches a real Python subprocess running `desktop/python_host/host.py`. Python **3.9+** is required; no Python interpreter is bundled or downloaded automatically. `EASY_TEXT_PYTHON=/absolute/path/to/python3` selects an interpreter at launch. Otherwise the manager probes the executable paths `/opt/homebrew/bin/python3`, `/usr/local/bin/python3`, and `/usr/bin/python3`, then uses `python3` from PATH. The plugin manager exposes its selected interpreter and reports startup errors. The primary agent additionally verified the plugin regressions with this Mac's `/usr/bin/python3` **3.9.6** and Homebrew Python **3.14**.
+
+Selecting a Packages directory, `.sublime-package`, or `.py` file opens a native trust dialog explaining that Python plugins may read/write files, use the network and launch processes with the user's account permissions. This subprocess is **not a security sandbox**. The app never searches for or auto-loads the user's existing Sublime Packages directory. Installation and enabling are explicit actions. A fresh app launch lists the saved sources but does not execute them until the user starts/enables the host. Archive and single-file installs create managed copies; external directory sources remain in place. Removing a source deletes only its managed copy or registration, never the original chosen directory/file.
+
+The packager places the Python host in `app.asar.unpacked/desktop/python_host`, because an external Python interpreter cannot read Electron's ASAR virtual filesystem. Only independent host sources are included; `__pycache__` is excluded from staging.
+
+## Real execution and transaction protocol
+
+The host loads user modules, registers `TextCommand`, `WindowCommand`, `ApplicationCommand`, `EventListener`, and basic `ViewEventListener` classes, and invokes their actual Python methods. ZIP packages support root Python modules, relative helper imports and mapped package resources. Single-file installs load only the selected entry script. `plugin_loaded`/`plugin_unloaded` hooks on loaded root modules run at startup/shutdown. Unsupported module imports and APIs produce visible tracebacks rather than pretending success.
+
+The renderer submits a snapshot containing active view, text, opaque document version, selections, filename and settings. Bridge positions are JavaScript UTF-16 offsets; the Python API uses Unicode code points. Every edit updates Python selection objects immediately, including reverse regions and later selections shifted by a length-changing replacement. Edit tokens are view-bound and expire after each TextCommand.
+
+A successful command returns final document text/selections and one minimal enclosing original-to-final change per document, with its expected version. The frontend validates the entire result and current versions before applying a single CodeMirror transaction per changed document. Thus a multi-edit command is one editor undo step. A TextCommand exception, or any event-listener exception after an earlier edit, rejects the document/effects result as a whole. This rollback concerns editor state only: arbitrary filesystem/network side effects performed directly by trusted Python code cannot be rolled back.
+
+`on_new`, `on_load`, `on_activated`, `on_deactivated`, `on_modified`, `on_selection_modified`, `on_pre_save`, `on_post_save`, `on_close`, and `on_init` are admitted event names. The renderer controls delivery and suppresses recursive plugin-result event loops. Deferred zero-delay callbacks are drained with a bounded callback count; delayed and threaded callbacks explicitly raise an unsupported-API error.
+
+## Implemented core and limits
+
+- Region: bounds, direction, sorting, coverage/intersection, containment. Selection: add/merge/clear/subtract and mutation-aware iteration.
+- View: text size/substrings, selection, insert/erase/replace, line/word/row/column conversions, UTF-16 conversion, read-only and dirty state, settings, document identity, basic visibility/status effects, nested implemented commands.
+- Window: current/open snapshot views, folders, focus, settings, variables, registered window commands, and finding/focusing an already-open file.
+- Application commands, clipboard/status effects, plugin settings persistence, mapped text/binary resources, basic variable expansion.
+- Command enablement respects no-argument `is_enabled` methods, and TextCommand `event` arguments are removed unless `want_event()` opts in.
+
+This is not the native `sublime_api` ABI. Unsupported APIs explicitly reject, including syntax scopes/selector engine, decorations/phantoms, arbitrary native panel callbacks, opening files outside the supplied editor snapshot, threaded callbacks, native extension compatibility and unimplemented built-in command names. Root package `__init__.py` is not currently treated as a plugin entry point. Settings/resource JSON currently uses strict JSON; Sublime-style comments and trailing commas are not accepted. `sublime.version()` returns the **emulated API baseline** `3211`, not an assertion that the program is Sublime Text.
+
+Lifecycle changes (install/start/stop/enable/remove) share a serial management queue. Every process callback checks child identity; stale stdout/errors cannot kill a newer host. A request timeout stops the owning process group. Response/snapshot/output limits prevent unlimited protocol buffering; they do not constitute a Python memory or filesystem sandbox. On app quit, the main process waits for plugin-host termination along with build cleanup.
+
+## Validation at this revision
+
+`npm run test:desktop`: **24 passed** on this Mac (15 editor/backend regressions plus 9 plugin tests). Plugin tests execute actual Python processes and cover Unicode/emoji/reverse multi-selections, failing/unsupported commands, fresh snapshots, Window/Application commands, events, persisted settings across restart, single-file isolation, enable/disable/remove, ZIP relative imports/resources, timeout termination, concurrent lifecycle requests, stale-child callbacks, event transaction rejection, and unchanged local Default `transform.py`, `goto_line.py`, and `copy_path.py` behavior. Missing local Sublime causes only the last optional test to skip; missing Python 3.9+ skips plugin tests with the corresponding test conditions.
+
+The independent reviewer's broader unchanged-Default checks are recorded outside the application in the parent repository's research evidence. They establish those tested flows, not compatibility with every third-party package. API behavior was cross-checked against local Build 3211 wrappers and the [official API reference](https://www.sublimetext.com/docs/api_reference.html), while keeping newer-version documentation features outside the claimed subset.

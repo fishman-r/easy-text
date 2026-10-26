@@ -292,3 +292,195 @@ test("shared-document changes map a peer pane selection without adopting the sou
   assert.equal(mapped.selection.main.head, 5);
   assert.equal(transaction.state.selection.main.head, 3);
 });
+
+import {
+  preparePluginDocuments,
+  validatePluginEffects,
+  assertPluginSnapshot,
+  pluginSettingPatch,
+} from "./plugin-transactions.js";
+import { selectionsByLine } from "./selection-tools.js";
+import { folderNodes } from "./folder-tree.js";
+test("plugin reply validates every version before any document can be committed", () => {
+  const files = [
+    { id: "a", content: "abc", version: 3 },
+    { id: "b", content: "xyz", version: 4 },
+  ];
+  assert.throws(
+    () =>
+      preparePluginDocuments(
+        [
+          {
+            id: "a",
+            expectedVersion: 3,
+            text: "ABC",
+            changes: [{ from: 0, to: 3, insert: "ABC" }],
+            selections: [{ anchor: 0, head: 3 }],
+          },
+          {
+            id: "b",
+            expectedVersion: 2,
+            text: "xyz",
+            changes: [],
+            selections: [{ anchor: 0, head: 0 }],
+          },
+        ],
+        files,
+      ),
+    /过期/,
+  );
+  assert.equal(files[0].content, "abc");
+  assert.equal(files[1].content, "xyz");
+});
+test("plugin transactions reject overlapping ranges and false final text", () => {
+  const files = [{ id: "a", content: "abc", version: 0 }];
+  assert.throws(
+    () =>
+      preparePluginDocuments(
+        [
+          {
+            id: "a",
+            expectedVersion: 0,
+            text: "bad",
+            changes: [
+              { from: 1, to: 3, insert: "x" },
+              { from: 2, to: 3, insert: "y" },
+            ],
+            selections: [{ anchor: 0, head: 0 }],
+          },
+        ],
+        files,
+      ),
+    /范围/,
+  );
+  assert.throws(
+    () =>
+      preparePluginDocuments(
+        [
+          {
+            id: "a",
+            expectedVersion: 0,
+            text: "bad",
+            changes: [],
+            selections: [{ anchor: 0, head: 0 }],
+          },
+        ],
+        files,
+      ),
+    /不一致/,
+  );
+});
+test("unknown plugin effect and oversized clipboard are rejected before commit", () => {
+  const files = [{ id: "a", content: "abc", version: 0 }];
+  const plans = preparePluginDocuments(
+    [
+      {
+        id: "a",
+        expectedVersion: 0,
+        text: "ABC",
+        changes: [{ from: 0, to: 3, insert: "ABC" }],
+        selections: [{ anchor: 0, head: 3 }],
+      },
+    ],
+    files,
+  );
+  assert.throws(
+    () =>
+      validatePluginEffects(
+        [{ type: "execute-arbitrary-js" }],
+        files,
+        plans,
+        () => false,
+      ),
+    /未支持/,
+  );
+  assert.throws(
+    () =>
+      validatePluginEffects(
+        [{ type: "clipboard", text: "x".repeat(1048577) }],
+        files,
+        plans,
+        () => false,
+      ),
+    /剪贴板/,
+  );
+  assert.equal(files[0].content, "abc");
+});
+test("plugin snapshot guards selection-only changes and active-view switches", () => {
+  const snapshot = { activeViewId: "a", views: [{ id: "a", version: 2 }] };
+  assert.throws(
+    () => assertPluginSnapshot(snapshot, [{ id: "a", version: 3 }], "a"),
+    /选区/,
+  );
+  assert.throws(
+    () => assertPluginSnapshot(snapshot, [{ id: "a", version: 2 }], "b"),
+    /活动文档/,
+  );
+});
+test("plugin effect settings and UTF16 selections retain explicit supported semantics", () => {
+  assert.deepEqual(
+    pluginSettingPatch({
+      tab_size: 4,
+      word_wrap: true,
+      translate_tabs_to_spaces: false,
+    }),
+    { indentSize: 4, wrap: true, useTabs: true },
+  );
+  assert.throws(
+    () => pluginSettingPatch({ unsupported_feature: true }),
+    /不支持/,
+  );
+  const plans = preparePluginDocuments(
+    [
+      {
+        id: "a",
+        expectedVersion: 1,
+        text: "😀X",
+        changes: [{ from: 2, to: 3, insert: "X" }],
+        selections: [{ anchor: 3, head: 2 }],
+      },
+    ],
+    [{ id: "a", content: "😀a", version: 1 }],
+  );
+  assert.deepEqual(plans[0].selections, [{ anchor: 3, head: 2 }]);
+});
+test("split selection by line preserves reversed ranges and excludes trailing empty line", () => {
+  const state = EditorState.create({
+    doc: "abc\ndef\nghi",
+    selection: { anchor: 8, head: 1 },
+    extensions: [EditorState.allowMultipleSelections.of(true)],
+  });
+  const selection = selectionsByLine(state);
+  assert.deepEqual(
+    selection.ranges.map((range) => [range.anchor, range.head]),
+    [
+      [3, 1],
+      [7, 4],
+    ],
+  );
+});
+test("folder explorer creates real nested hierarchy and merges loaded disk entries", () => {
+  const nodes = folderNodes(
+    [{ id: "a", name: "a.js", path: "/project/src/a.js", content: "" }],
+    [
+      { kind: "directory", name: "src", path: "/project/src" },
+      { kind: "file", name: "a.js", path: "/project/src/a.js" },
+    ],
+    { path: "/project" },
+  );
+  assert.equal(nodes.length, 2);
+  assert.equal(nodes[0].kind, "directory");
+  assert.equal(nodes[1].depth, 1);
+  assert.equal(nodes[1].loadedId, "a");
+  assert.deepEqual(nodes[1].parents, ["src"]);
+});
+
+test("folder inventory relative names are displayed once at their hierarchy level", () => {
+  const nodes = folderNodes(
+    [],
+    [{ path: "/p/src/a.js", name: "src/a.js", kind: "file" }],
+    { path: "/p" },
+  );
+  assert.equal(nodes[1].name, "a.js");
+  assert.equal(nodes[1].key, "src/a.js");
+});

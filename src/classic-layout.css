@@ -23,3 +23,28 @@
 #config-text { background: #24291e; color: #d9e1ce; border-color: #6a7659; }
 .config-actions button[type=submit] { background: #65734d; color: #fff; }
 @media(max-width:700px) { .minimap { width: 62px; flex-basis: 62px; } }
+/* The local macOS reference uses a light sidebar, independently of Monokai. */
+.sidebar { width: 186px; flex-basis: 186px; background: #eceef0; color: #45484a; border-right-color: #babdc0; }
+.sidebar-heading { color: #85898c; font-size: 11px; font-weight: 700; letter-spacing: 0; }
+.sidebar-heading button { font-size: 11px; font-weight: 700; letter-spacing: 0; }
+.sidebar-heading button:hover { color: #43474a; }
+.open-file-row { padding-left: 14px; color: #43464a; }
+.open-file-row.selected, .tree-file.selected { background: #d6dadd; color: #262a2d; }
+.open-file-row .document-icon { display: none; }
+.open-file-close { order: -1; margin-right: 4px; color: #92989b; }
+.tree-directory, .tree-file { color: #474c4f; }
+.tree-directory:hover, .tree-file:hover { background: #dfe2e4; color: #292e31; }
+.tree-disclosure, .document-icon, .project-heading button { color: #8c9499; }
+.folder-icon, .folder-icon:before { background: #929ba1; }
+#tree-filter { background: #fafafa; color: #383c3f; border-color: #b7bfc4; }
+.project-heading { color: #43494d; font-weight: 500; }
+.plugin-panel .workbench-heading>span { font-size: 10px; color: #adb99c; }
+.plugin-trust { max-width: 1000px; }
+.plugin-toolbar { display: flex; flex-wrap: wrap; gap: 7px; margin: 8px 0 12px; }
+.plugin-source { display: flex; gap: 8px; align-items: center; border-bottom: 1px solid #566149; padding: 8px 0; }
+.plugin-source>div { flex: 1; min-width: 0; }
+.plugin-source strong { font-size: 11px; font-weight: 500; }
+.plugin-source small { display: block; color: #a8b398; margin-top: 3px; font-size: 10px; overflow-wrap: anywhere; }
+.plugin-panel details { margin: 10px 0; font-size: 11px; }
+.plugin-command { margin: 3px; }
+#plugin-output { max-height: 180px; overflow: auto; }

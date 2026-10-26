@@ -17,7 +17,7 @@ export function folderNodes(files, diskTree, workspace, query = "") {
           kind: "directory",
         });
       node = node.children.get(part);
-      if (index === parts.length - 1) Object.assign(node, data);
+      if (index === parts.length - 1) Object.assign(node, data, { name: part });
     });
   }
   for (const entry of diskTree) {

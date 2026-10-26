@@ -1,3 +1,10 @@
+import { selectionsByLine } from "./selection-tools.js";
+import { createPluginController } from "./plugins.js";
+import {
+  preparePluginDocuments,
+  pluginSettingPatch,
+  assertPluginSnapshot as validatePluginSnapshot,
+} from "./plugin-transactions.js";
 import { folderNodes } from "./folder-tree.js";
 import { monokai } from "./monokai.js";
 import { restoreSession, normalizeSettings } from "./session-state.js";
@@ -22,6 +29,10 @@ import {
   deleteLine,
   splitLine,
   transposeChars,
+  addCursorAbove,
+  addCursorBelow,
+  selectAll,
+  isolateHistory,
 } from "@codemirror/commands";
 import {
   openSearchPanel,
@@ -57,6 +68,7 @@ let workspace = null;
 let nativeSessionReady = !native;
 let diskTree = [];
 let workbench = null;
+let plugins = null;
 let paneFiles = [];
 let minimaps = [];
 const viewFiles = new WeakMap();
@@ -71,13 +83,13 @@ const STORAGE = "easy-text-session-v2";
 const intro = `/**\n * easy text — 把想法写成代码\n *\n * 一个独立实现的本地代码编辑器。\n * Cmd / Ctrl + P 跳转文件，Shift + Cmd / Ctrl + P 打开命令面板。\n * ${native ? "桌面模式：打开文件后原路径保存，检查磁盘冲突。" : "浏览器演示：保存发起下载，不直接写回原文件。"}\n */\n\nexport function createWorkspace(name = '我的项目') {\n  const tools = [\n    '多光标编辑',\n    '正则查找与替换',\n    '语法高亮与代码折叠',\n    '独立文档分栏与代码片段',\n  ];\n\n  return {\n    name,\n    tools,\n    ready: true,\n    createdAt: new Date().toISOString(),\n  };\n}\n\nconst workspace = createWorkspace();\nconsole.log('开始创造', workspace);\n`;
 function file(name, content) {
   content = normalizeText(content);
-  return { id: crypto.randomUUID(), name, content, saved: content };
+  return { id: crypto.randomUUID(), name, content, saved: content, version: 0 };
 }
 const initial = [
   file("src/welcome.js", intro),
   file(
     "README.md",
-    "# 欢迎来到 easy text\n\n这是一个使用 CodeMirror 独立实现的代码编辑器。\n\n## 快速开始\n\n- 点击左侧文件开始编辑。\n- 使用「打开」导入 UTF-8 文本文件或目录。\n- Cmd/Ctrl + S 保存当前文件（浏览器版下载）。\n- Cmd/Ctrl + F 打开查找，可开启正则并展开替换。\n- Alt + 点击增加光标；Cmd/Ctrl + D 选择下一处相同文本。\n- 使用右上角分栏按钮，在两栏中选择不同文件，也可以共享同一文档。\n\n## 边界\n\n会话在本机自动保存。桌面版支持原路径保存和冲突检测；浏览器版下载备份。\n桌面版提供项目搜索替换、Git 和构建输出。命令面板包含宏、片段、书签和自定义快捷键。没有完整 LSP 或 Sublime Python 插件兼容层。\n",
+    "# 欢迎来到 easy text\n\n这是一个使用 CodeMirror 独立实现的代码编辑器。\n\n## 快速开始\n\n- 点击左侧文件开始编辑。\n- 使用「打开」导入 UTF-8 文本文件或目录。\n- Cmd/Ctrl + S 保存当前文件（浏览器版下载）。\n- Cmd/Ctrl + F 打开查找，可开启正则并展开替换。\n- Alt + 点击增加光标；Cmd/Ctrl + D 选择下一处相同文本。\n- 使用右上角分栏按钮，在两栏中选择不同文件，也可以共享同一文档。\n\n## 边界\n\n会话在本机自动保存。桌面版支持原路径保存和冲突检测；浏览器版下载备份。\n桌面版提供项目搜索替换、Git 和构建输出。命令面板包含宏、片段、书签和自定义快捷键。桌面插件管理可显式加载可信 Python 插件，支持已实现的 Sublime Python API 子集。没有完整 LSP，也不保证任意插件兼容。\n",
   ),
   file(
     "src/styles.css",
@@ -257,11 +269,14 @@ function languageName(name) {
     }[name.split(".").pop()] || "纯文本"
   );
 }
-function editorTheme() {
+function effectiveSettings(file) {
+  return { ...settings, ...file?.editorOverrides };
+}
+function editorTheme(configuration = settings) {
   return [
-    settings.light ? [] : monokai,
+    configuration.light ? [] : monokai,
     EditorView.theme({
-      "&": { fontSize: settings.fontSize + "px", height: "100%" },
+      "&": { fontSize: configuration.fontSize + "px", height: "100%" },
       ".cm-scroller": {
         fontFamily: '"SFMono-Regular",Consolas,"Liberation Mono",monospace',
         lineHeight: "1.45",
@@ -274,6 +289,7 @@ function editorTheme() {
   ];
 }
 function createState(f) {
+  const localSettings = effectiveSettings(f);
   const config = {
     theme: new Compartment(),
     wrap: new Compartment(),
@@ -286,12 +302,14 @@ function createState(f) {
       basicSetup,
       EditorState.allowMultipleSelections.of(true),
       config.indent.of([
-        indentUnit.of(" ".repeat(settings.indentSize)),
-        EditorState.tabSize.of(settings.indentSize),
+        indentUnit.of(
+          localSettings.useTabs ? "\t" : " ".repeat(localSettings.indentSize),
+        ),
+        EditorState.tabSize.of(localSettings.indentSize),
       ]),
       keymap.of([indentWithTab, { key: "Mod-d", run: selectNextOccurrence }]),
-      config.theme.of(editorTheme()),
-      config.wrap.of(settings.wrap ? EditorView.lineWrapping : []),
+      config.theme.of(editorTheme(localSettings)),
+      config.wrap.of(localSettings.wrap ? EditorView.lineWrapping : []),
       config.lang.of(lang(f.name)),
       EditorView.domEventHandlers({
         focus: (_, v) => {
@@ -302,6 +320,7 @@ function createState(f) {
           document.querySelector("#breadcrumbs").textContent =
             (workspace?.name || "工作区") + " › " + current().name;
           status(v);
+          plugins?.event("on_activated", { documentId: active });
           persist();
         },
       }),
@@ -309,7 +328,14 @@ function createState(f) {
         const id = viewFiles.get(update.view) || f.id;
         const target = files.find((file) => file.id === id);
         if (!target) return;
+        if (update.docChanged || update.selectionSet)
+          target.version =
+            (Number.isInteger(target.version) ? target.version : 0) + 1;
         workbench?.observe(update);
+        if (update.docChanged)
+          plugins?.event("on_modified", { documentId: id });
+        else if (update.selectionSet)
+          plugins?.event("on_selection_modified", { documentId: id });
         if (update.docChanged) {
           if (settings.bookmarks?.[id])
             settings.bookmarks[id] = settings.bookmarks[id].map((position) =>
@@ -449,6 +475,7 @@ function replaceDocument(id, content) {
     }).state;
     states.set(id, entry);
     target.content = content;
+    target.version = (target.version || 0) + 1;
   }
   renderTabs();
   renderTree();
@@ -528,10 +555,13 @@ function status(view = focused) {
   document.querySelector("#line-ending").textContent =
     current().lineEnding || "LF";
   document.querySelector("#indent-status").textContent =
-    "Tab Size: " + settings.indentSize;
+    "Tab Size: " + effectiveSettings(current()).indentSize;
   document.title = current().name.split("/").pop() + " — easy text";
 }
 function closeTab(id) {
+  plugins
+    ?.event("on_close", { documentId: id, immediate: true })
+    .catch((error) => toast(error.message));
   tabs = tabs.filter((t) => t !== id);
   if (!tabs.length) {
     toast("已保留最后一个标签；文件仍在工作区中。");
@@ -567,7 +597,7 @@ function newFile() {
   askName("新建文件", "untitled.js", async (name) => {
     if (native && workspace) {
       try {
-        await receiveNative(
+        const created = await receiveNative(
           await native.createFile({
             workspaceId: workspace.id,
             relativePath: name,
@@ -575,6 +605,7 @@ function newFile() {
           }),
           true,
         );
+        plugins?.event("on_new", { documentId: created.id });
       } catch (error) {
         toast("新建失败：" + error.message);
       }
@@ -584,6 +615,7 @@ function newFile() {
     files.push(f);
     activate(f.id);
     focused.focus();
+    plugins?.event("on_new", { documentId: f.id });
   });
 }
 function rename() {
@@ -653,6 +685,7 @@ async function receiveNative(data, shouldActivate = false, force = false) {
   });
   if (!existing) files.push(target);
   if (shouldActivate) activate(target.id);
+  if (!existing) plugins?.event("on_load", { documentId: target.id });
   renderTree();
   renderTabs();
   persist();
@@ -696,6 +729,10 @@ async function save(asNew = false) {
   const target = current();
   if (native) {
     try {
+      await plugins?.event("on_pre_save", {
+        immediate: true,
+        documentId: target.id,
+      });
       if (target.externalConflict && !asNew)
         throw new Error("缓冲区存在外部修改冲突，请另存为或重新读取磁盘文件");
       if (target.lineEnding === "mixed") {
@@ -732,6 +769,7 @@ async function save(asNew = false) {
       renderTree();
       persist();
       toast("已保存到磁盘：" + target.path);
+      plugins?.event("on_post_save", { documentId: target.id });
     } catch (error) {
       toast("保存失败：" + error.message);
     }
@@ -782,15 +820,20 @@ async function importFiles(list) {
 function reconfigure() {
   document.body.classList.toggle("light", settings.light);
   for (const [id, entry] of states) {
+    const localSettings = effectiveSettings(
+      files.find((file) => file.id === id),
+    );
     entry.state = entry.state.update({
       effects: [
-        entry.config.theme.reconfigure(editorTheme()),
+        entry.config.theme.reconfigure(editorTheme(localSettings)),
         entry.config.indent.reconfigure([
-          indentUnit.of(" ".repeat(settings.indentSize)),
-          EditorState.tabSize.of(settings.indentSize),
+          indentUnit.of(
+            localSettings.useTabs ? "\t" : " ".repeat(localSettings.indentSize),
+          ),
+          EditorState.tabSize.of(localSettings.indentSize),
         ]),
         entry.config.wrap.reconfigure(
-          settings.wrap ? EditorView.lineWrapping : [],
+          localSettings.wrap ? EditorView.lineWrapping : [],
         ),
       ],
     }).state;
@@ -1103,7 +1146,7 @@ document.addEventListener("click", (e) => {
       const host = document.querySelector("#open-files");
       host.hidden = !host.hidden;
       b.setAttribute("aria-expanded", String(!host.hidden));
-      b.textContent = (host.hidden ? "▸" : "▾") + " OPEN FILES";
+      b.textContent = "OPEN FILES";
     },
     toggleFolders: () => {
       const host = document.querySelector("#tree");
@@ -1302,6 +1345,23 @@ workbench = createWorkbench({
 });
 commands.push(
   ...workbench.commands,
+  ["file.close", "关闭当前标签", "⌘ W", () => closeTab(active)],
+  [
+    "selection.split",
+    "将选区拆分为行",
+    "",
+    () => {
+      try {
+        focused.dispatch({ selection: selectionsByLine(focused.state) });
+        focused.focus();
+      } catch (error) {
+        toast(error.message);
+      }
+    },
+  ],
+  ["selection.above", "在上一行添加光标", "", () => run(addCursorAbove)],
+  ["selection.below", "在下一行添加光标", "", () => run(addCursorBelow)],
+  ["plugins.manage", "插件管理 / Python API 子集", "", () => plugins.open()],
   [
     "view.sidebar",
     "切换侧栏",
@@ -1438,10 +1498,165 @@ commands.push(
     },
   ],
 );
+function pluginSnapshot(documentId = active) {
+  const ids = [...new Set([...tabs, ...(split ? paneFiles : []), documentId])];
+  return {
+    activeViewId: documentId,
+    views: ids
+      .map((id) => {
+        const file = files.find((file) => file.id === id);
+        if (!file) return null;
+        const view =
+          focused && viewFiles.get(focused) === id
+            ? focused
+            : views.find((view) => viewFiles.get(view) === id);
+        const selection =
+          view?.state.selection ||
+          states.get(id)?.state.selection ||
+          EditorSelection.single(0);
+        const local = effectiveSettings(file);
+        return {
+          id: file.id,
+          path: file.path || null,
+          name: file.name,
+          text: file.content,
+          version: file.version || 0,
+          selections: selection.ranges.map((range) => ({
+            anchor: range.anchor,
+            head: range.head,
+          })),
+          settings: {
+            tab_size: local.indentSize,
+            word_wrap: local.wrap,
+            font_size: local.fontSize,
+            translate_tabs_to_spaces: !local.useTabs,
+          },
+        };
+      })
+      .filter(Boolean),
+    window: {
+      id: "main",
+      folders: workspace ? [workspace.path] : [],
+      settings: {},
+    },
+  };
+}
+function assertPluginSnapshot(snapshot) {
+  validatePluginSnapshot(snapshot, files, active);
+}
+
+function commitPluginDocuments(plans) {
+  for (const plan of plans) {
+    const entry = states.get(plan.file.id) || createState(plan.file);
+    const selection = EditorSelection.create(
+      plan.selections.map((range) =>
+        EditorSelection.range(range.anchor, range.head),
+      ),
+      Math.min(entry.state.selection.mainIndex, plan.selections.length - 1),
+    );
+    if (!plan.changes.length && selection.eq(entry.state.selection)) continue;
+    const spec = {
+      changes: plan.changes,
+      selection,
+      annotations: isolateHistory.of("full"),
+      scrollIntoView: true,
+    };
+    const view =
+      focused && viewFiles.get(focused) === plan.file.id
+        ? focused
+        : views.find((view) => viewFiles.get(view) === plan.file.id);
+    if (view) view.dispatch(spec);
+    else {
+      entry.state = entry.state.update(spec).state;
+      states.set(plan.file.id, entry);
+      plan.file.content = entry.state.doc.toString();
+      plan.file.version = (plan.file.version || 0) + 1;
+    }
+  }
+  renderTabs();
+  renderTree();
+  persist();
+}
+const pluginBuiltinAliases = {
+  undo: "edit.undo",
+  redo: "edit.redo",
+  toggle_comment: "edit.comment",
+  indent: "indent.more",
+  unindent: "indent.less",
+  upper_case: "text.upper",
+  lower_case: "text.lower",
+};
+function canExecutePluginBuiltin(name) {
+  return (
+    ["insert", "append", "select_all"].includes(name) ||
+    Object.hasOwn(pluginBuiltinAliases, name) ||
+    commands.some(
+      (command) =>
+        command[0] === name &&
+        /^(edit|line|text|indent|fold|unfold)\./.test(name),
+    )
+  );
+}
+plugins = createPluginController({
+  native,
+  files: () => files,
+  commands: () => commands,
+  toast,
+  activate,
+  snapshot: pluginSnapshot,
+  assertSnapshot: assertPluginSnapshot,
+  prepareDocuments: (documents) => preparePluginDocuments(documents, files),
+  commitDocuments: commitPluginDocuments,
+  canExecuteBuiltin: canExecutePluginBuiltin,
+  show: (id, point) => {
+    activate(id);
+    focused.dispatch({ effects: EditorView.scrollIntoView(point) });
+  },
+  applySettings: (id, values) => {
+    const patch = pluginSettingPatch(values);
+    if (id) {
+      const file = files.find((file) => file.id === id);
+      file.editorOverrides = { ...file.editorOverrides, ...patch };
+    } else Object.assign(settings, patch);
+    reconfigure();
+  },
+  executeBuiltin: (name, args, id) => {
+    if (id) activate(id);
+    if (name === "insert") {
+      focused.dispatch(focused.state.replaceSelection(args.characters));
+      return;
+    }
+    if (name === "append") {
+      focused.dispatch({
+        changes: { from: focused.state.doc.length, insert: args.characters },
+      });
+      return;
+    }
+    if (name === "select_all") {
+      selectAll(focused);
+      return;
+    }
+    const command = commands.find(
+      (command) => command[0] === (pluginBuiltinAliases[name] || name),
+    );
+    command[3]();
+  },
+});
+
 installMenus(() => commands, toast);
 if (native) {
   document.title = current().name.split("/").pop() + " — easy text";
   native.onEvent(async (event) => {
+    if (event.type === "menu-command") {
+      const command = commands.find((command) => command[0] === event.command);
+      if (command)
+        try {
+          await command[3]();
+        } catch (error) {
+          toast(error.message);
+        }
+      else toast("尚未实现的菜单命令：" + event.command);
+    }
     if (event.type === "app-close-request") {
       try {
         await native.saveSession({
