@@ -86,7 +86,18 @@
     "toggleDevTools": "toggleDevTools",
     "resetZoom": "resetZoom",
     "zoomIn": "zoomIn",
-    "zoomOut": "zoomOut"
+    "zoomOut": "zoomOut",
+    "Save All": "Save All",
+    "Reopen Closed Tab": "Reopen Closed Tab",
+    "Go Forward": "Go Forward",
+    "Title Case": "Title Case",
+    "Swap Case": "Swap Case",
+    "ROT13": "ROT13",
+    "Reverse Lines": "Reverse Lines",
+    "Join Lines": "Join Lines",
+    "Select All Occurrences": "Select All Occurrences",
+    "Undo Selection": "Undo Selection",
+    "Redo Selection": "Redo Selection"
   },
   "ui": {
     "openFiles": "OPEN FILES",

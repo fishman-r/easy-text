@@ -4,6 +4,7 @@ const keyAliases={space:'Space',spacebar:'Space',enter:'Enter',return:'Enter',es
 const shiftedSymbols={'+':'Equal','_':'Minus','?':'Slash','|':'Backslash','{':'BracketLeft','}':'BracketRight',':':'Semicolon','"':'Quote','~':'Backquote','<':'Comma','>':'Period','!':'1','@':'2','#':'3','$':'4','%':'5','^':'6','&':'7','*':'8','(':'9',')':'0'};
 const modifierOrder=['Mod','Ctrl','Alt','Shift','Meta'];
 export const RESERVED_SHORTCUTS={
+  "Mod-Shift-t":"file.reopenClosed","Mod-j":"lines.join","Mod-u":"selection.undo","Mod-Shift-u":"selection.redo","Ctrl-Meta-g":"selection.allOccurrences",
   'Mod-q':'native.quit','Mod-Comma':'settings.open','Mod-c':'native.copy','Mod-x':'native.cut','Mod-v':'native.paste','Mod-a':'native.selectAll','Mod-h':'native.hide','Mod-Alt-h':'native.hideOthers','Mod-m':'native.minimize','Ctrl-Meta-f':'native.fullscreen','Mod-n':'file.new','Mod-o':'file.open','Mod-s':'file.save','Mod-Shift-s':'file.saveAs','Mod-w':'file.close',
   'Mod-p':'file.quick','Mod-Shift-p':'commands.show','Mod-f':'edit.find','Mod-Shift-f':'project.replace',
   'Mod-z':'edit.undo','Mod-Shift-z':'edit.redo','Mod-/':'edit.comment','Mod-d':'edit.next',

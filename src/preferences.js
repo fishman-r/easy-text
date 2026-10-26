@@ -1,3 +1,4 @@
+import { normalizeDisplayOptions } from "./display-options.js";
 export function validateEditorPreferences(input) {
   const fontSize = Number(input.fontSize), indentSize = Number(input.indentSize);
   if (!Number.isInteger(fontSize) || fontSize < 10 || fontSize > 24) throw new Error('字号请选择 10 至 24 的整数');
@@ -6,7 +7,8 @@ export function validateEditorPreferences(input) {
   if (!['spaces', 'tabs'].includes(input.indentStyle)) throw new Error('请选择空格或 Tab 缩进');
   if (!['single', 'split'].includes(input.layout)) throw new Error('请选择有效的编辑布局');
   for (const key of ['wrap', 'minimap']) if (typeof input[key] !== 'boolean') throw new Error('显示选项必须为开关');
-  return { fontSize, indentSize, light: input.theme === 'light', useTabs: input.indentStyle === 'tabs', split: input.layout === 'split', wrap: input.wrap, minimap: input.minimap };
+  const display = normalizeDisplayOptions(input);
+  return { ...display, fontSize, indentSize, light: input.theme === 'light', useTabs: input.indentStyle === 'tabs', split: input.layout === 'split', wrap: input.wrap, minimap: input.minimap };
 }
 
 export function validateFilePreferences(input, { allowMixed = false } = {}) {
@@ -29,6 +31,8 @@ export function createPreferences(ctx) {
     <label class="form-field">缩进宽度<select name="indentSize"><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></label>
     <label class="form-field">编辑布局<select name="layout"><option value="single">单栏</option><option value="split">双栏</option></select></label>
     <div class="form-field"><label><input type="checkbox" name="wrap"> 自动换行</label><label><input type="checkbox" name="minimap"> 显示文档概览</label></div>
+    <label class="form-field">列标尺<select name="rulerColumn"><option value="0">关闭</option><option value="80">80 列</option><option value="100">100 列</option><option value="120">120 列</option></select></label>
+    <div class="form-field"><label><input type="checkbox" name="lineNumbers"> 显示行号</label><label><input type="checkbox" name="showWhitespace"> 显示空格与 Tab</label><label><input type="checkbox" name="highlightActiveLine"> 高亮当前行</label></div>
     </div><p class="panel-note">更改缩进设置不会自动改写已有文本。当前文件的插件设置可覆盖默认值。</p><button type="button" data-reset-overrides hidden>当前文件使用全局编辑设置</button></fieldset>
     <fieldset><legend>更多设置</legend><div class="settings-links"><button type="button" data-command="language.configure">界面语言</button><button type="button" data-command="keybindings.edit">快捷键</button><button type="button" data-command="snippet.manage">代码片段</button><button type="button" data-command="build.panel">构建配置</button><button type="button" data-command="plugins.manage">插件管理</button><button type="button" data-command="file.encoding">当前文件格式</button></div></fieldset>
     <p class="form-error" role="alert" hidden></p></div><div class="dialog-actions"><button type="button" data-close>取消</button><button class="primary-button" type="submit">应用设置</button></div></form>`;
@@ -36,6 +40,9 @@ export function createPreferences(ctx) {
   const form = dialog.querySelector('form'), field = name => form.elements.namedItem(name);
   function open(focusName) {
     const settings = ctx.getSettings();
+    const display = normalizeDisplayOptions(settings);
+    for (const key of ['lineNumbers','showWhitespace','highlightActiveLine']) field(key).checked = display[key];
+    field('rulerColumn').value = String(display.rulerColumn);
     field('theme').value = settings.light ? 'light' : 'dark'; field('fontSize').value = settings.fontSize;
     field('indentStyle').value = settings.useTabs ? 'tabs' : 'spaces'; field('indentSize').value = settings.indentSize;
     field('layout').value = settings.split ? 'split' : 'single'; field('wrap').checked = !!settings.wrap; field('minimap').checked = settings.minimap !== false;
@@ -53,6 +60,8 @@ export function createPreferences(ctx) {
     event.preventDefault();
     try {
       const input = Object.fromEntries(['theme', 'fontSize', 'indentStyle', 'indentSize', 'layout'].map(name => [name, field(name).value]));
+      for (const key of ['lineNumbers','showWhitespace','highlightActiveLine']) input[key] = field(key).checked;
+      input.rulerColumn = field('rulerColumn').value;
       input.wrap = field('wrap').checked; input.minimap = field('minimap').checked;
       ctx.apply(validateEditorPreferences(input)); dialog.close();
     } catch (error) { const output = dialog.querySelector('.form-error'); output.textContent = error.message; output.hidden = false; }
@@ -76,7 +85,8 @@ export function createPreferences(ctx) {
     formatDialog.querySelector('.form-error').hidden = true; formatDialog.showModal(); formatField(options.focus || (options.requireLineEnding ? 'lineEnding' : 'encoding')).focus();
   }
   formatField('encoding').addEventListener('change', syncBom);
-  formatDialog.addEventListener('click', event => { if (event.target.closest('[data-close]')) formatDialog.close(); });
+  formatDialog.addEventListener('click', event => { if (event.target.closest('[data-close]')) { formatOptions.onCancel?.(); formatDialog.close(); } });
+  formatDialog.addEventListener('cancel', () => formatOptions.onCancel?.());
   formatForm.addEventListener('submit', async event => {
     event.preventDefault();
     try {

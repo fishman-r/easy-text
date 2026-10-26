@@ -1,3 +1,4 @@
+import { normalizeDisplayOptions } from "./display-options.js";
 import { normalizeLocalePreference } from "./i18n.js";
 import { validSession } from "./core.js";
 import { normalizeText } from "./text-tools.js";
@@ -10,6 +11,7 @@ export function normalizeSettings(input = {}) {
     indentSize: 4,
     ...input,
   };
+  Object.assign(settings, normalizeDisplayOptions(settings));
   settings.fontSize = Math.max(
     10,
     Math.min(24, Number(settings.fontSize) || 14),
@@ -90,6 +92,7 @@ export function restoreSession(data) {
     files,
     active,
     tabs,
+    closedTabs: (Array.isArray(data.closedTabs) ? data.closedTabs : []).filter(entry => entry && ids.has(entry.id) && !tabs.includes(entry.id) && Number.isInteger(entry.index) && entry.index >= 0).slice(-50),
     settings: normalizeSettings(data.settings),
     workspace: data.workspace || null,
     split: data.split === true,

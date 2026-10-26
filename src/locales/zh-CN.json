@@ -86,7 +86,18 @@
     "toggleDevTools": "开发者工具",
     "resetZoom": "实际大小",
     "zoomIn": "放大",
-    "zoomOut": "缩小"
+    "zoomOut": "缩小",
+    "Save All": "全部保存",
+    "Reopen Closed Tab": "重新打开关闭的标签",
+    "Go Forward": "前进",
+    "Title Case": "单词首字母大写",
+    "Swap Case": "交换大小写",
+    "ROT13": "ROT13 字母转换",
+    "Reverse Lines": "倒转行顺序",
+    "Join Lines": "合并行",
+    "Select All Occurrences": "选择全部相同文本",
+    "Undo Selection": "撤销选区变化",
+    "Redo Selection": "重做选区变化"
   },
   "ui": {
     "openFiles": "已打开文件",

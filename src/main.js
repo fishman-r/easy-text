@@ -20,7 +20,8 @@ import { monokai } from "./monokai.js";
 import { restoreSession, normalizeSettings } from "./session-state.js";
 import { installMenus } from "./menus.js";
 import { renderShell } from "./shell.js";
-import { basicSetup } from "codemirror";
+import { baseEditorSetup, displayExtensions } from "./display-options.js";
+import { getExtraEditingCommands, convertLeadingIndent } from "./editing-extras.js";
 import { EditorState, Compartment, EditorSelection } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import {
@@ -76,6 +77,8 @@ import "./classic-layout.css";
 const native = window.easyText || null;
 let workspace = null;
 let nativeSessionReady = !native;
+let startupInteracted = false;
+for (const event of ["beforeinput", "keydown", "pointerdown", "drop"]) document.addEventListener(event, () => { if (!nativeSessionReady) startupInteracted = true; }, {capture:true});
 let diskTree = [];
 let workbench = null;
 let preferences = null;
@@ -88,6 +91,7 @@ const paneScroll = new Map();
 const changeNotifications = new Map();
 const notifiedRevisions = new Map();
 const navigationHistory = [];
+const navigationForward = [];
 let navigatingBack = false;
 
 const STORAGE = "easy-text-session-v2";
@@ -119,6 +123,7 @@ const restored = validSession(stored) ? restoreSession(stored) : null;
 let files = restored?.files || initial;
 let active = restored?.active || files[0].id;
 let tabs = restored?.tabs || files.map((file) => file.id);
+let closedTabs = restored?.closedTabs || [];
 let settings = restored?.settings || normalizeSettings();
 let localeInfo = {
   locale: DEFAULT_LOCALE,
@@ -213,6 +218,7 @@ function captureSession() {
     files,
     active,
     tabs,
+    closedTabs,
     settings,
     workspace,
     split,
@@ -312,11 +318,13 @@ function createState(f) {
     lang: new Compartment(),
     indent: new Compartment(),
     locale: new Compartment(),
+    display: new Compartment(),
   };
   const state = EditorState.create({
     doc: f.content,
     extensions: [
-      basicSetup,
+      baseEditorSetup,
+      config.display.of(displayExtensions(localSettings)),
       config.locale.of(
         EditorState.phrases.of(codeMirrorPhrases(localeInfo.locale)),
       ),
@@ -358,9 +366,9 @@ function createState(f) {
           plugins?.event("on_selection_modified", { documentId: id });
         if (update.docChanged) {
           if (settings.bookmarks?.[id])
-            settings.bookmarks[id] = settings.bookmarks[id].map((position) =>
-              update.changes.mapPos(position),
-            );
+            settings.bookmarks[id] = [...new Set(settings.bookmarks[id].map(position =>
+              update.state.doc.lineAt(update.changes.mapPos(position)).from,
+            ))];
           target.content = update.state.doc.toString();
           states.set(id, { state: update.state, config });
           if (!syncing) {
@@ -389,6 +397,7 @@ function createState(f) {
               update.state.selection.main.head,
           ) > 30
         ) {
+          navigationForward.length = 0;
           navigationHistory.push({
             id,
             position: update.startState.selection.main.head,
@@ -465,6 +474,7 @@ function activate(id) {
   if (!files.some((f) => f.id === id)) return;
   if (!tabs.includes(id)) tabs.push(id);
   if (focused && id !== active && !navigatingBack) {
+    navigationForward.length = 0;
     navigationHistory.push({
       id: active,
       position: focused.state.selection.main.head,
@@ -589,6 +599,9 @@ function status(view = focused) {
   document.title = current().name.split("/").pop() + " — easy text";
 }
 function closeTab(id) {
+  if (!tabs.includes(id)) return;
+  if (tabs.length === 1) return toast("已保留最后一个标签；文件仍在工作区中。");
+  closedTabs = [...closedTabs.filter(entry => entry.id !== id), {id, index:tabs.indexOf(id)}].slice(-50);
   plugins
     ?.event("on_close", { documentId: id, immediate: true })
     .catch((error) => toast(error.message));
@@ -597,10 +610,41 @@ function closeTab(id) {
     toast("已保留最后一个标签；文件仍在工作区中。");
     tabs = [id];
   }
-  if (active === id) activate(tabs[tabs.length - 1]);
-  else renderTabs();
+  const focusedIndex = Math.max(0, views.indexOf(focused));
+  const replacement = tabs[Math.min(tabs.length - 1, closedTabs.at(-1).index)];
+  const wasVisible = paneFiles.includes(id);
+  paneFiles = paneFiles.map(entry => entry === id ? replacement : entry);
+  if (active === id) active = replacement;
+  if (wasVisible) mount(focusedIndex);
+  renderTabs(); renderTree();
   persist();
 }
+function reopenClosedTab() {
+  while (closedTabs.length) {
+    const entry = closedTabs.pop();
+    if (!files.some(file => file.id === entry.id) || tabs.includes(entry.id)) continue;
+    tabs.splice(Math.min(entry.index, tabs.length), 0, entry.id);
+    activate(entry.id); return;
+  }
+  toast("没有可恢复的关闭标签");
+}
+let savingAll = false;
+async function saveAll() {
+  if (!native) return toast("全部保存需要桌面版");
+  if (savingAll) return toast("正在全部保存");
+  const targets = files.filter(file => tabs.includes(file.id) && dirty(file));
+  if (!targets.length) return toast("没有需要保存的文件");
+  savingAll = true;
+  let saved = 0;
+  try {
+    for (const target of targets) {
+      if (!await save(false, target)) { activate(target.id); return toast(`全部保存已停止，成功 ${saved} 个；请检查当前文件`); }
+      saved++;
+    }
+    toast(`已保存全部 ${saved} 个文件`);
+  } finally { savingAll = false; }
+}
+
 let namingAction = null;
 function askName(title, value, action) {
   namingAction = action;
@@ -756,15 +800,16 @@ async function openProject() {
     toast(error.message);
   }
 }
-async function save(asNew = false) {
-  const target = current();
+async function save(asNew = false, target = current()) {
   if (native) {
     try {
       if (target.lineEnding === "mixed") {
-        return preferences.openFormat(target, {
+        activate(target.id);
+        return new Promise(resolve => preferences.openFormat(target, {
           requireLineEnding: true,
-          onApply: () => { if (current().id === target.id) return save(asNew); },
-        });
+          onCancel: () => resolve(false),
+          onApply: async () => resolve(await save(asNew, target)),
+        }));
       }
       await plugins?.event("on_pre_save", {
         immediate: true,
@@ -787,7 +832,7 @@ async function save(asNew = false) {
               suggestedName: target.name,
               ...capturedFormat,
             });
-      if (!result) return;
+      if (!result) return false;
       applySaveResult(target, captured, capturedFormat, result);
       refreshFileLabels();
       renderTabs();
@@ -795,8 +840,10 @@ async function save(asNew = false) {
       persist();
       toast("已保存到磁盘：" + target.path);
       plugins?.event("on_post_save", { documentId: target.id });
+      return !dirty(target);
     } catch (error) {
       toast("保存失败：" + error.message);
+      return false;
     }
     return;
   }
@@ -852,6 +899,7 @@ function reconfigure() {
     entry.state = entry.state.update({
       effects: [
         entry.config.theme.reconfigure(editorTheme(localSettings)),
+        entry.config.display.reconfigure(displayExtensions(localSettings)),
         entry.config.locale.reconfigure(
           EditorState.phrases.of(codeMirrorPhrases(localeInfo.locale)),
         ),
@@ -1379,9 +1427,12 @@ function nextBookmark(direction) {
   });
   focused.focus();
 }
-function navigateBack() {
-  const previous = navigationHistory.pop();
-  if (!previous) return toast("没有更早的导航位置");
+function navigateBack(forward = false) {
+  const source = forward ? navigationForward : navigationHistory;
+  const destination = forward ? navigationHistory : navigationForward;
+  const previous = source.pop();
+  if (!previous) return toast(forward ? "没有更新的导航位置" : "没有更早的导航位置");
+  destination.push({id:active, position:focused.state.selection.main.head});
   navigatingBack = true;
   try {
     activate(previous.id);
@@ -1405,15 +1456,9 @@ function moveTab(direction) {
   persist();
 }
 function convertIndent(mode) {
-  const text = current().content;
-  const content =
-    mode === "tabs"
-      ? text.replace(/^(?: {2})+/gm, (spaces) => "\t".repeat(spaces.length / 2))
-      : text.replace(/^\t+/gm, (tabs) =>
-          " ".repeat(tabs.length * settings.indentSize),
-        );
-  replaceDocument(active, content);
+  replaceDocument(active, convertLeadingIndent(current().content, mode, effectiveSettings(current()).indentSize));
 }
+
 workbench = createWorkbench({
   native,
   workspace: () => workspace,
@@ -1448,6 +1493,9 @@ preferences = createPreferences({
   },
 });
 commands.push(
+  ...getExtraEditingCommands({view: () => focused, toast}),
+  ["file.reopenClosed", "重新打开关闭的标签", "⇧ ⌘ T", reopenClosedTab],
+  ["file.saveAll", "全部保存", "", saveAll],
   ["app.about", "关于 easy text", "", () => appDialogs.alert({title:"关于 easy text",message:"easy text",detail:"ET · 独立实现的本地代码编辑器\n基于 Electron 与 CodeMirror 6。"})],
   ["settings.open", "设置 / 外观与编辑器", "⌘ ,", () => preferences.open()],
   ...workbench.commands,
@@ -1499,15 +1547,14 @@ commands.push(
   ["bookmark.toggle", "切换当前行书签", "", toggleBookmark],
   ["bookmark.next", "跳转下一个书签", "", () => nextBookmark(1)],
   ["bookmark.previous", "跳转上一个书签", "", () => nextBookmark(-1)],
-  ["navigation.back", "返回上一个导航位置", "", navigateBack],
+  ["navigation.back", "返回上一个导航位置", "", () => navigateBack()],
+  ["navigation.forward", "前进到下一个导航位置", "", () => navigateBack(true)],
   [
     "tabs.closeOthers",
     "关闭其他标签（保留缓冲区）",
     "",
     () => {
-      tabs = [active];
-      renderTabs();
-      persist();
+      for (const id of [...tabs]) if (id !== active) closeTab(id);
     },
   ],
   [
@@ -1515,9 +1562,7 @@ commands.push(
     "关闭右侧标签（保留缓冲区）",
     "",
     () => {
-      tabs = tabs.slice(0, tabs.indexOf(active) + 1);
-      renderTabs();
-      persist();
+      for (const id of tabs.slice(tabs.indexOf(active) + 1)) closeTab(id);
     },
   ],
   ["tabs.moveLeft", "将当前标签左移", "", () => moveTab(-1)],
@@ -1776,13 +1821,14 @@ if (native) {
   native
     .loadSession()
     .then(async (result) => {
-      if (!result?.data || !validSession(result.data)) return;
+      if (!result?.data || !validSession(result.data) || startupInteracted) return;
       if (!validSession(stored)) {
         const data = restoreSession(result.data);
         for (const view of views) view.destroy();
         views = [];
         files = data.files;
         tabs = data.tabs;
+        closedTabs = data.closedTabs;
         active = data.active;
         settings = data.settings;
         split = data.split;
