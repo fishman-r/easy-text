@@ -1,9 +1,11 @@
+import { createSettingsForms } from "./settings-forms.js";
+import { migrateSnippets, shortcutMatches, matchingSnippetPrefix, normalizeBuildSettings, validateBuildSettings, persistSettingsWithBackup } from "./settings-data.js";
 import { t } from "./i18n.js";
 import { buildDiagnostics } from "./build-diagnostics.js";
 import { dirty } from "./core.js";
 import { syntaxSymbols, localDefinition } from "./syntax-navigation.js";
 import { localSearch } from "./search-client.js";
-import { snippet } from "@codemirror/autocomplete";
+import { snippet, hasNextSnippetField, hasPrevSnippetField } from "@codemirror/autocomplete";
 import { EditorSelection } from "@codemirror/state";
 import {
   findSymbols,
@@ -47,7 +49,7 @@ export function createWorkbench(ctx) {
       body: '<${1:div} class="${2:className}">\n  ${3:content}\n</${1:div}>',
     },
   ]);
-  if (!Array.isArray(snippets)) snippets = [];
+  snippets = migrateSnippets(snippets);
   let keybindings = readSetting("easy-text-keybindings", {
     "Mod-Shift-o": "symbols",
     "Mod-Shift-m": "macro.record",
@@ -63,11 +65,6 @@ export function createWorkbench(ctx) {
   const panel = document.createElement("section");
   panel.className = "workbench-panel hidden";
   document.querySelector("main").append(panel);
-  document.body.insertAdjacentHTML(
-    "beforeend",
-    `<dialog id="config-dialog"><form id="config-form"><div class="dialog-label"><label id="config-title" for="config-text"></label><button type="button" data-dismiss="config-dialog">×</button></div><p id="config-description"></p><textarea id="config-text" spellcheck="false" aria-label="JSON 配置"></textarea><div class="config-actions"><button type="button" data-dismiss="config-dialog">取消</button><button type="submit">保存配置</button></div></form></dialog>`,
-  );
-  let saveConfig = () => {};
   const safe =
     (action) =>
     async (...args) => {
@@ -77,26 +74,11 @@ export function createWorkbench(ctx) {
         ctx.toast(error.message || String(error));
       }
     };
-  function config(title, description, value, onSave) {
-    document.querySelector("#config-title").textContent = title;
-    document.querySelector("#config-description").textContent = description;
-    document.querySelector("#config-text").value = JSON.stringify(
-      value,
-      null,
-      2,
-    );
-    saveConfig = onSave;
-    document.querySelector("#config-dialog").showModal();
-  }
-  document.querySelector("#config-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    try {
-      saveConfig(JSON.parse(document.querySelector("#config-text").value));
-      document.querySelector("#config-dialog").close();
-      ctx.toast("配置已保存");
-    } catch (error) {
-      ctx.toast("配置错误：" + error.message);
-    }
+  const forms = createSettingsForms({
+    getCommands: ctx.commands, getBindings: () => keybindings, getSnippets: () => snippets,
+    saveBindings: value => { persistSettingsWithBackup(localStorage, 'easy-text-keybindings', value); keybindings = value; },
+    saveSnippets: value => { persistSettingsWithBackup(localStorage, 'easy-text-snippets', value); snippets = value; if(panelName.startsWith('代码片段')) chooseSnippet(); },
+    notify: ctx.toast,
   });
   function show(name, body, actions = {}) {
     document.querySelectorAll("main > .workbench-panel").forEach((other) => {
@@ -350,26 +332,29 @@ export function createWorkbench(ctx) {
   }
   function build() {
     const enabled = ctx.native && ctx.workspace();
-    const saved = readSetting("easy-text-build", {
-      command: "node",
-      args: ["--version"],
-    });
+    const saved = normalizeBuildSettings(readSetting('easy-text-build', null));
+    let args = [...saved.args];
+    const readArgs = () => Array.from(panel.querySelectorAll('[data-build-argument]'), input => input.value);
+    const renderArgs = () => {
+      panel.querySelector('#build-arguments').innerHTML = args.map((argument,index) => `<div class="build-argument-row"><label for="build-argument-${index}">参数 ${index+1}</label><input id="build-argument-${index}" data-build-argument value="${escapeHTML(argument)}" aria-label="参数 ${index+1}"><button data-panel-action="removeArgument" data-index="${index}" aria-label="删除参数 ${index+1}">删除</button></div>`).join('');
+    };
+    const saveBuild = () => {
+      const value = validateBuildSettings(panel.querySelector('#build-command').value, readArgs(), saved);
+      persistSettingsWithBackup(localStorage, 'easy-text-build', value);
+      return value;
+    };
     show(
       "构建与运行输出",
       enabled
-        ? `<div class="build-tools"><input id="build-command" aria-label="可执行程序" value="${escapeHTML(saved.command)}" placeholder="可执行程序，例如 npm"><input id="build-args" aria-label="参数 JSON 数组" value="${escapeHTML(JSON.stringify(saved.args))}" placeholder='["run","build"]'><button data-panel-action="run">运行</button><button data-panel-action="cancel">停止</button></div><p class="panel-note">项目目录中执行程序；参数为 JSON 字符串数组，不经过 shell，不支持管道。桌面端会确认执行。</p><div id="build-diagnostics"></div><pre id="build-output"></pre>`
+        ? `<div class="build-tools"><label for="build-command">可执行程序</label><input id="build-command" value="${escapeHTML(saved.command)}" placeholder="例如 npm"><button data-panel-action="saveBuild">保存设置</button><button data-panel-action="run">运行</button><button data-panel-action="cancel">停止</button></div><div id="build-arguments"></div><button data-panel-action="addArgument">添加参数</button><p class="panel-note">每行是一个独立参数，空格和引号按原样传入；不要添加外层引号。不经过 shell，不支持管道。桌面端会确认执行。</p><div id="build-diagnostics"></div><pre id="build-output"></pre>`
         : '<p class="panel-note">浏览器版不会执行本机程序。请在桌面版打开项目后使用构建系统。</p>',
       {
+        saveBuild: () => { saveBuild(); ctx.toast('构建设置已保存'); },
+        addArgument: () => { args=readArgs(); args.push(''); renderArgs(); Array.from(panel.querySelectorAll('[data-build-argument]')).at(-1)?.focus(); },
+        removeArgument: button => { args=readArgs(); args.splice(Number(button.dataset.index),1); renderArgs(); },
         run: async () => {
           if (buildId) throw new Error("请先停止当前构建");
-          const command = panel.querySelector("#build-command").value.trim();
-          const args = JSON.parse(panel.querySelector("#build-args").value);
-          if (!Array.isArray(args) || args.some((a) => typeof a !== "string"))
-            throw new Error("参数必须是字符串数组");
-          localStorage.setItem(
-            "easy-text-build",
-            JSON.stringify({ command, args }),
-          );
+          const {command,args} = saveBuild();
           buildLog = "";
           const result = await ctx.native.startBuild({
             workspaceId: ctx.workspace().id,
@@ -377,7 +362,7 @@ export function createWorkbench(ctx) {
             args,
           });
           buildId = result.buildId;
-          buildLog += "> " + command + " " + args.join(" ") + "\n";
+          buildLog += "> 程序：" + command + "\n" + args.map((arg,index) => "  参数 " + (index+1) + "：" + (arg || "（空字符串）")).join("\n") + "\n";
           refreshBuild();
         },
         diagnostic: async (button) => {
@@ -392,6 +377,7 @@ export function createWorkbench(ctx) {
         },
       },
     );
+    if (enabled) renderArgs();
     refreshBuild();
   }
   function refreshBuild() {
@@ -426,27 +412,9 @@ export function createWorkbench(ctx) {
   function chooseSnippet() {
     show(
       "代码片段 · Tab 跳转占位符",
-      `<button data-panel-action="configure">编辑自定义片段 JSON</button>${snippets.map((s, i) => `<button class="result-row" data-panel-action="insert" data-index="${i}"><span>${escapeHTML(s.name)}</span><code>${escapeHTML(s.body.slice(0, 100))}</code></button>`).join("")}`,
+      `<button data-panel-action="configure">管理代码片段</button>${snippets.map((s, i) => `<button class="result-row" data-panel-action="insert" data-index="${i}"><span>${escapeHTML(s.name)}</span><code>${escapeHTML(s.body.slice(0, 100))}</code></button>`).join("")}`,
       {
-        configure: () =>
-          config(
-            "代码片段配置",
-            "数组元素为 {name, body}；占位符语法 ${1:name}，Tab 跳至下一个字段。",
-            snippets,
-            (value) => {
-              if (
-                !Array.isArray(value) ||
-                value.some(
-                  (s) =>
-                    typeof s.name !== "string" || typeof s.body !== "string",
-                )
-              )
-                throw new Error("需要 name/body 字符串数组");
-              snippets = value;
-              localStorage.setItem("easy-text-snippets", JSON.stringify(value));
-              chooseSnippet();
-            },
-          ),
+        configure: () => forms.openSnippets(),
         insert: (button) => {
           const view = ctx.view();
           const range = view.state.selection.main;
@@ -461,48 +429,19 @@ export function createWorkbench(ctx) {
       },
     );
   }
-  function editKeys() {
-    config(
-      "自定义快捷键",
-      "键为 Mod-Shift-k 等组合，值为命令 ID。Mod 对应 macOS Command / 其它系统 Ctrl。命令 ID 在下方列出。\n" +
-        ctx
-          .commands()
-          .map((c) => c[0])
-          .join(", "),
-      keybindings,
-      (value) => {
-        if (!value || Array.isArray(value) || typeof value !== "object")
-          throw new Error("需要 JSON 对象");
-        for (const [key, id] of Object.entries(value)) {
-          if (
-            typeof id !== "string" ||
-            !ctx.commands().some((c) => c[0] === id)
-          )
-            throw new Error("未知命令：" + id);
-          if (!key.includes("-")) throw new Error("快捷键必须包含修饰键");
-        }
-        keybindings = value;
-        localStorage.setItem("easy-text-keybindings", JSON.stringify(value));
-      },
-    );
-  }
+  function editKeys() { forms.openShortcuts(); }
   document.addEventListener(
     "keydown",
     (event) => {
       if (document.querySelector("dialog[open]")) return;
-      for (const [binding, id] of Object.entries(keybindings)) {
-        const parts = binding.toLowerCase().split("-");
-        const key = parts.pop();
-        const mod = /Mac|iPhone|iPad/.test(navigator.platform)
-          ? event.metaKey
-          : event.ctrlKey;
-        if (
-          key === event.key.toLowerCase() &&
-          parts.includes("mod") === mod &&
-          parts.includes("shift") === event.shiftKey &&
-          parts.includes("alt") === event.altKey &&
-          (parts.includes("ctrl") ? event.ctrlKey : true)
-        ) {
+      const view = ctx.view();
+      if (event.key === 'Tab' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && view.hasFocus && view.state.selection.ranges.length===1 && view.state.selection.main.empty && !hasNextSnippetField(view.state) && !hasPrevSnippetField(view.state)) {
+        const head=view.state.selection.main.head;
+        const item=matchingSnippetPrefix(snippets,view.state.doc.toString(),head);
+        if(item){event.preventDefault();event.stopImmediatePropagation();snippet(item.body)(view,null,head-item.prefix.length,head);return;}
+      }
+      for (const [binding, id] of Object.entries(keybindings || {})) {
+        if (shortcutMatches(event,binding,navigator.platform)) {
           const command = ctx.commands().find((c) => c[0] === id);
           if (command) {
             event.preventDefault();
@@ -540,7 +479,8 @@ export function createWorkbench(ctx) {
     ["git.panel", "Git 状态 / 差异 / 暂存 / 提交", "", git],
     ["build.panel", "构建系统 / 输出面板", "", build],
     ["snippet.insert", "插入 / 管理代码片段", "", chooseSnippet],
-    ["keybindings.edit", "编辑自定义快捷键 JSON", "", editKeys],
+    ["snippet.manage", "管理代码片段", "", () => forms.openSnippets()],
+    ["keybindings.edit", "自定义快捷键", "", editKeys],
     [
       "macro.record",
       "开始 / 停止录制编辑宏",

@@ -83,6 +83,7 @@ const groups = {
     "plugins.manage",
   ],
   preferences: [
+    "settings.open",
     "language.configure",
     "view.theme",
     "view.wrap",

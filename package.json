@@ -1,12 +1,12 @@
 {
   "name": "easy-text",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build --base=./",
-    "test": "node --test src/core.test.js",
+    "test": "node --test src/*.test.js",
     "desktop": "npm run build && electron .",
     "test:desktop": "node --test desktop-tests/*.test.mjs",
     "package:mac": "npm run build && NODE_USE_ENV_PROXY=1 node desktop/package.mjs"

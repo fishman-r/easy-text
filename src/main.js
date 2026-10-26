@@ -1,3 +1,5 @@
+import { createPreferences } from "./preferences.js";
+import { installAppDialogs } from "./dialogs.js";
 import {
   t,
   codeMirrorPhrases,
@@ -76,6 +78,7 @@ let workspace = null;
 let nativeSessionReady = !native;
 let diskTree = [];
 let workbench = null;
+let preferences = null;
 let plugins = null;
 let paneFiles = [];
 let minimaps = [];
@@ -97,15 +100,15 @@ const initial = [
   file("src/welcome.js", intro),
   file(
     "README.md",
-    "# 欢迎来到 easy text\n\n这是一个使用 CodeMirror 独立实现的代码编辑器。\n\n## 快速开始\n\n- 点击左侧文件开始编辑。\n- 使用「打开」导入 UTF-8 文本文件或目录。\n- Cmd/Ctrl + S 保存当前文件（浏览器版下载）。\n- Cmd/Ctrl + F 打开查找，可开启正则并展开替换。\n- Alt + 点击增加光标；Cmd/Ctrl + D 选择下一处相同文本。\n- 使用右上角分栏按钮，在两栏中选择不同文件，也可以共享同一文档。\n\n## 边界\n\n会话在本机自动保存。桌面版支持原路径保存和冲突检测；浏览器版下载备份。\n桌面版提供项目搜索替换、Git 和构建输出。命令面板包含宏、片段、书签和自定义快捷键。桌面插件管理可显式加载可信 Python 插件，支持已实现的 Sublime Python API 子集。没有完整 LSP，也不保证任意插件兼容。\n",
+    "# 欢迎来到 easy text\n\n这是一个使用 CodeMirror 独立实现的代码编辑器。\n\n## 快速开始\n\n- 点击左侧文件开始编辑。\n- 使用「打开」导入 UTF-8 文本文件或目录。\n- Cmd/Ctrl + S 保存当前文件（浏览器版下载）。\n- Cmd/Ctrl + F 打开查找，可开启正则并展开替换。\n- Alt + 点击增加光标；Cmd/Ctrl + D 选择下一处相同文本。\n- 使用视图菜单的分栏布局，在两栏中选择不同文件，也可以共享同一文档。\n\n## 边界\n\n会话在本机自动保存。桌面版支持原路径保存和冲突检测；浏览器版下载备份。\n桌面版提供项目搜索替换、Git 和构建输出。命令面板包含宏、片段、书签和自定义快捷键。桌面插件管理可显式加载可信 Python 插件，支持已实现的 Sublime Python API 子集。没有完整 LSP，也不保证任意插件兼容。\n",
   ),
   file(
     "src/styles.css",
     ":root {\n  --accent: #c4ef8b;\n  --background: #11151b;\n}\n\n.workspace {\n  display: grid;\n  min-height: 100vh;\n  color: var(--accent);\n}\n",
   ),
   file(
-    "data/settings.json",
-    '{\n  "name": "easy text",\n  "theme": "dark",\n  "tabSize": 2,\n  "wordWrap": false\n}\n',
+    "data/example.json",
+    '{\n  "project": "example",\n  "items": ["alpha", "beta"]\n}\n',
   ),
 ];
 let stored;
@@ -708,6 +711,7 @@ async function receiveNative(data, shouldActivate = false, force = false) {
     id: target.id,
     content,
     saved: content,
+    formatDirty: false,
     externalConflict: false,
   });
   if (!existing) files.push(target);
@@ -756,24 +760,18 @@ async function save(asNew = false) {
   const target = current();
   if (native) {
     try {
+      if (target.lineEnding === "mixed") {
+        return preferences.openFormat(target, {
+          requireLineEnding: true,
+          onApply: () => { if (current().id === target.id) return save(asNew); },
+        });
+      }
       await plugins?.event("on_pre_save", {
         immediate: true,
         documentId: target.id,
       });
       if (target.externalConflict && !asNew)
         throw new Error("缓冲区存在外部修改冲突，请另存为或重新读取磁盘文件");
-      if (target.lineEnding === "mixed") {
-        return askName(
-          "混合换行：输入 LF、CRLF 或 CR 以明确规范化",
-          "LF",
-          (ending) => {
-            if (!["LF", "CRLF", "CR"].includes(ending))
-              return toast("换行格式无效");
-            target.lineEnding = ending;
-            save(asNew);
-          },
-        );
-      }
       const captured = target.content;
       const capturedFormat = fileFormat(target);
       const result =
@@ -845,6 +843,7 @@ async function importFiles(list) {
   );
 }
 function reconfigure() {
+  const focusedIndex = Math.max(0, views.indexOf(focused));
   document.body.classList.toggle("light", settings.light);
   for (const [id, entry] of states) {
     const localSettings = effectiveSettings(
@@ -868,7 +867,7 @@ function reconfigure() {
       ],
     }).state;
   }
-  mount();
+  mount(focusedIndex);
   persist();
 }
 function run(command) {
@@ -899,9 +898,7 @@ const commands = [
         paneFiles = [active, files.find((f) => f.id !== active)?.id || active];
       }
       mount();
-      document
-        .querySelector('[data-action="split"]')
-        .classList.toggle("on", split);
+      document.querySelector('[data-action="split"]')?.classList.toggle("on", split);
       persist();
     },
   ],
@@ -969,10 +966,10 @@ const commands = [
     "⇧ ⌘ F",
     () => workbench.search(),
   ],
-  ["project.export", "导出工作区 JSON 备份", "", exportWorkspace],
+  ["project.export", "导出工作区备份", "", exportWorkspace],
   [
     "project.import",
-    "合并导入工作区 JSON 文件",
+    "合并导入工作区备份",
     "",
     () => document.querySelector("#workspace-input").click(),
   ],
@@ -1182,6 +1179,7 @@ function showHelp() {
 }
 
 document.querySelector("#app").innerHTML = renderShell();
+const appDialogs = installAppDialogs(native);
 document.body.classList.toggle("desktop", Boolean(native));
 document.documentElement.lang = localeInfo.locale;
 document
@@ -1319,6 +1317,7 @@ document.querySelector("#palette-query").addEventListener("keydown", (e) => {
   }
 });
 document.addEventListener("keydown", (e) => {
+  if (document.querySelector("dialog[open]")) return;
   if (!(e.metaKey || e.ctrlKey)) return;
   const key = e.key.toLowerCase();
   if (key === "p") {
@@ -1343,7 +1342,7 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("dragover", (e) => e.preventDefault());
 document.addEventListener("drop", (e) => {
   e.preventDefault();
-  if (e.dataTransfer.files.length) importFiles([...e.dataTransfer.files]);
+  if (!document.querySelector("dialog[open]") && e.dataTransfer.files.length) importFiles([...e.dataTransfer.files]);
 });
 window.addEventListener("beforeunload", () => {
   clearTimeout(saveTimer);
@@ -1428,7 +1427,29 @@ workbench = createWorkbench({
   toast,
   commands: () => commands,
 });
+preferences = createPreferences({
+  getSettings: () => ({...settings, split}),
+  hasOverrides: () => Object.keys(current().editorOverrides || {}).length > 0,
+  resetOverrides: () => { current().editorOverrides = {}; reconfigure(); toast("当前文件已使用全局编辑设置"); },
+  apply: value => {
+    const {split:nextSplit,...patch} = value;
+    Object.assign(settings, patch);
+    if (nextSplit && !split) paneFiles = [active, files.find(file => file.id !== active)?.id || active];
+    split = nextSplit;
+    reconfigure(); toast("设置已应用");
+  },
+  navigate: id => { const command = commands.find(command => command[0] === id); if (command) command[3](); else toast("设置入口暂不可用"); },
+  applyFormat: (file, patch) => {
+    if (!files.includes(file) || current().id !== file.id) throw new Error("活动文件已改变，请重新打开文件格式设置");
+    if (Object.entries(patch).some(([key,value]) => fileFormat(file)[key] !== value)) {
+      Object.assign(file, patch); file.formatDirty = true;
+      renderTabs(); renderTree(); status(); persist();
+    }
+  },
+});
 commands.push(
+  ["app.about", "关于 easy text", "", () => appDialogs.alert({title:"关于 easy text",message:"easy text",detail:"ET · 独立实现的本地代码编辑器\n基于 Electron 与 CodeMirror 6。"})],
+  ["settings.open", "设置 / 外观与编辑器", "⌘ ,", () => preferences.open()],
   ...workbench.commands,
   ["language.configure", t("languageCommand"), "", openLanguageDialog],
   ["file.close", "关闭当前标签", "⌘ W", () => closeTab(active)],
@@ -1460,12 +1481,7 @@ commands.push(
     "indent.configure",
     "设置缩进宽度（2 / 4 / 8 空格）",
     "",
-    () =>
-      askName("缩进宽度：2、4 或 8", String(settings.indentSize), (value) => {
-        if (![2, 4, 8].includes(Number(value))) return toast("缩进宽度无效");
-        settings.indentSize = Number(value);
-        reconfigure();
-      }),
+    () => preferences.open("indentSize"),
   ],
   ["line.up", "向上移动行", "", () => run(moveLineUp)],
   ["line.down", "向下移动行", "", () => run(moveLineDown)],
@@ -1512,20 +1528,7 @@ commands.push(
     "",
     () => {
       if (!native) return toast("编码转换保存需要桌面版");
-      askName(
-        "保存编码：utf-8 / utf-16le / utf-16be",
-        current().encoding || "utf-8",
-        (encoding) => {
-          if (!["utf-8", "utf-16le", "utf-16be"].includes(encoding))
-            return toast("编码无效");
-          current().encoding = encoding;
-          current().formatDirty = true;
-          renderTabs();
-          renderTree();
-          status();
-          persist();
-        },
-      );
+      preferences.openFormat(current(), {focus: "encoding"});
     },
   ],
   [
@@ -1534,20 +1537,7 @@ commands.push(
     "",
     () => {
       if (!native) return toast("换行格式转换保存需要桌面版");
-      askName(
-        "保存换行格式：LF / CRLF / CR",
-        current().lineEnding || "LF",
-        (ending) => {
-          if (!["LF", "CRLF", "CR"].includes(ending))
-            return toast("换行格式无效");
-          current().lineEnding = ending;
-          current().formatDirty = true;
-          renderTabs();
-          renderTree();
-          status();
-          persist();
-        },
-      );
+      preferences.openFormat(current(), {focus: "lineEnding"});
     },
   ],
   ["file.saveAs", "另存为…", "⇧ ⌘ S", () => save(true)],
@@ -1565,22 +1555,16 @@ commands.push(
     "file.reload",
     "重新读取磁盘文件（将放弃当前更改）",
     "",
-    () => {
+    async () => {
       const f = current();
       if (!native || !f.path) return toast("当前文件不是桌面磁盘文件");
-      askName("输入 RELOAD 放弃当前缓冲区更改", "", async (value) => {
-        if (value === "RELOAD")
-          try {
-            await receiveNative(
-              await native.readFile({ path: f.path }),
-              false,
-              true,
-            );
-            mount();
-          } catch (error) {
-            toast(error.message);
-          }
-      });
+      const version = f.version || 0;
+      if (!await appDialogs.confirm({title:"重新读取磁盘文件",message:"放弃当前文件尚未保存的更改？",detail:f.name + "\n将使用磁盘文件替换当前编辑内容。"})) return;
+      try {
+        const data = await native.readFile({path:f.path});
+        if ((f.version || 0) !== version) throw new Error("确认后文件又发生了修改，已取消重新读取");
+        await receiveNative(data, false, true); mount();
+      } catch (error) { toast(error.message); }
     },
   ],
 );
@@ -1738,6 +1722,7 @@ if (native) {
       persist();
     }
     if (event.type === "menu-command") {
+      if (document.querySelector("dialog[open]")) return;
       const command = commands.find((command) => command[0] === event.command);
       if (command)
         try {

@@ -10,18 +10,14 @@
 .workbench-heading strong { color: #d4dcc8; }
 .workbench-panel-tabs button { color: #b8c2a8; }
 .workbench-body input:not([type=checkbox]), .workbench-body select { background: #23291e; border-color: #6a7659; color: #d9e1ce; }
-.workbench-body button { border-color: #636f52; border-radius: 2px; }
+.workbench-body button { border-color: #636f52; border-radius: 0; }
 .panel-note { color: #b0b9a2; }
 .result-row { border-bottom-color: #48533b !important; }
 .result-row code, .workbench-body pre { color: #bdc9ad; }
-.app-menu { background: #41453c; border-color: #737c67; border-radius: 3px; }
+.app-menu { background: #41453c; border-color: #737c67; border-radius: 0; }
 .app-menu button { color: #dde1d5; }
 .app-menu button:hover, .app-menu button:focus { background: #65734d; }
 .app-menu kbd { color: #bac4ac; }
-#config-dialog { background: #363a30; }
-#config-description { color: #bec6b0; }
-#config-text { background: #24291e; color: #d9e1ce; border-color: #6a7659; }
-.config-actions button[type=submit] { background: #65734d; color: #fff; }
 @media(max-width:700px) { .minimap { width: 62px; flex-basis: 62px; } }
 /* The local macOS reference uses a light sidebar, independently of Monokai. */
 .sidebar { width: 186px; flex-basis: 186px; background: #eceef0; color: #45484a; border-right-color: #babdc0; }
@@ -53,3 +49,71 @@
 .plugin-compatibility { margin: 8px 0; font-size: 11px; line-height: 1.6; }
 .plugin-compatibility dt { color: #d7e1c9; margin-top: 7px; }
 .plugin-compatibility dd { margin: 2px 0 0; color: #b5c2a5; }
+
+/* Shared rectangular application dialogs; editor file-tab geometry is untouched. */
+dialog { border-radius: 0; background: #363a30; color: #e5e9dc; border: 1px solid #7b826e; padding: 0; max-height: calc(100dvh - 64px); overflow: auto; margin: 32px auto; font-size: 12px; box-shadow: 0 18px 60px #0008; }
+dialog::backdrop { background: #10130eb3; }
+dialog *, .app-menu, .workbench-body button, .workbench-body input:not([type=checkbox]), .workbench-body select, #toast { border-radius: 0; }
+dialog .dialog-label { position: sticky; top: 0; z-index: 1; background: #41463a; color: #e5e9dc; min-height: 44px; padding: 10px 16px; border-bottom: 1px solid #656d58; font-size: 12px; gap: 12px; }
+dialog .dialog-label label, dialog .dialog-label strong { font-weight: 600; }
+dialog .dialog-label button { margin-left: auto; min-width: 28px; min-height: 28px; padding: 4px; font-size: 12px; }
+dialog :is(input:not([type=checkbox]):not([type=radio]), select, textarea) { border-radius: 0; background: #252b20; color: #f0f3e9; border: 1px solid #7b866a; padding: 8px 10px; font: inherit; min-width: 0; max-width: 100%; }
+dialog input[type=checkbox], dialog input[type=radio] { accent-color: #91a76a; }
+dialog button { font: inherit; }
+dialog button:hover { background: #535f42; }
+dialog button:disabled { cursor: not-allowed; opacity: .5; }
+dialog :is(button,input,select,textarea,a):focus-visible { outline: 2px solid #c5d897; outline-offset: 2px; }
+dialog :is(.name-body,.settings-body) { padding: 16px; }
+dialog :is(.name-actions,.settings-actions,.config-actions) { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 12px 0 0; }
+dialog :is(.name-actions,.settings-actions,.settings-toolbar,.settings-row) button { border: 1px solid #7b866a; min-height: 32px; padding: 6px 14px; }
+dialog :is(.name-confirm,.primary,button[type=submit]) { background: #65774b; color: #fff; }
+.settings-dialog { width: min(760px, calc(100vw - 32px)); }
+.settings-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.settings-list { display: grid; gap: 12px; }
+.settings-row { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; padding: 12px; border: 1px solid #5f6952; background: #30362a; }
+.settings-field { display: flex; flex: 1 1 180px; flex-direction: column; gap: 6px; min-width: 0; line-height: 1.5; }
+.settings-field :is(input,select,textarea) { width: 100%; }
+.settings-field input[type=checkbox] { width: auto; align-self: flex-start; }
+.settings-field small,.settings-empty { color: #bcc6ad; line-height: 1.6; }
+.settings-error { color: #ffb6a9; white-space: pre-wrap; overflow-wrap: anywhere; }
+.settings-error:empty { display: none; }
+.settings-code { font: 12px/1.6 ui-monospace,monospace !important; min-height: 100px; resize: vertical; tab-size: 4; }
+.confirmation-dialog { width: min(540px, calc(100vw - 32px)); }
+.confirmation-dialog p { margin: 0 0 12px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.confirmation-detail { font: 11px/1.6 ui-monospace,monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40dvh; overflow: auto; margin: 0; color: #c4cdb7; }
+#build-arguments { display: grid; gap: 6px; width: 100%; }
+.build-argument-row { display: flex; gap: 8px; align-items: center; }
+.build-argument-row input { flex: 1; min-width: 0 !important; width: auto !important; }
+#palette-query { margin: 12px 16px; width: calc(100% - 32px); }
+#palette-results { padding: 0 8px 8px; }
+#help .dialog-label { margin-bottom: 16px; }
+@media(max-width:600px) { dialog { margin-top: 16px; max-height: calc(100dvh - 32px); } .settings-row { flex-direction: column; align-items: stretch; } .settings-field { flex-basis: auto; } .help-grid { grid-template-columns: 1fr; } }
+/* Public aliases used by general preferences and file-format forms. */
+.app-dialog { width: min(640px, calc(100vw - 32px)); }
+.dialog-body { padding: 16px; }
+.dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 12px 16px 16px; }
+.dialog-actions button { border: 1px solid #7b866a; min-height: 32px; padding: 6px 14px; }
+.form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+.form-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; line-height: 1.5; }
+.form-field :is(input,select,textarea) { width: 100%; }
+.form-field input[type=checkbox] { width: auto; align-self: flex-start; }
+.form-error { color: #ffb6a9; white-space: pre-wrap; overflow-wrap: anywhere; }
+.form-error:empty { display: none; }
+dialog .primary-button { background: #65774b; color: #fff; }
+@media(max-width:600px) { .form-grid { grid-template-columns: 1fr; } }
+
+/* Preferences reuse the same compact header, borders and action controls. */
+dialog .dialog-label h2 { margin: 0; font-size: inherit; line-height: 1.5; }
+.dialog-body fieldset { min-width: 0; margin: 0 0 16px; padding: 12px; border: 1px solid #5f6952; }
+.dialog-body legend { padding: 0 6px; font-weight: 600; }
+.settings-links { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.settings-links button, [data-reset-overrides] { padding: 8px 12px; border: 1px solid #7b866a; text-align: left; min-height: 34px; }
+.dialog-body small { color: #bcc6ad; font-size: 11px; }
+
+.settings-dialog > form > .settings-actions { padding: 12px 16px 16px; }
+.snippet-row { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; }
+.snippet-row > .settings-toolbar, .snippet-row > .settings-field:last-child { grid-column: 1 / -1; }
+.snippet-row > .settings-toolbar { justify-content: space-between; margin-bottom: 0; }
+.shortcut-row fieldset { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; margin: 0; border: 1px solid #5f6952; }
+.shortcut-row fieldset label { display: inline-flex; gap: 4px; align-items: center; }
+@media(max-width:600px) { .snippet-row { grid-template-columns: 1fr; } }
