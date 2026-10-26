@@ -1,3 +1,4 @@
+import { createMemoryBuffer, durableSession } from "./memory-buffer.js";
 import { createPreferences } from "./preferences.js";
 import { installAppDialogs } from "./dialogs.js";
 import {
@@ -216,7 +217,7 @@ function captureSession() {
       scrollLeft: scroll.left,
     });
   }
-  return {
+  return durableSession({
     files,
     active,
     tabs,
@@ -226,7 +227,7 @@ function captureSession() {
     split,
     paneFiles,
     viewStates,
-  };
+  });
 }
 function persist() {
   clearTimeout(saveTimer);
@@ -601,15 +602,15 @@ function status(view = focused) {
 }
 function closeTab(id) {
   if (!tabs.includes(id)) return;
-  if (tabs.length === 1) return toast("已保留最后一个标签；文件仍在工作区中。");
   closedTabs = [...closedTabs.filter(entry => entry.id !== id), {id, index:tabs.indexOf(id)}].slice(-50);
   plugins
     ?.event("on_close", { documentId: id, immediate: true })
     .catch((error) => toast(error.message));
   tabs = tabs.filter((t) => t !== id);
   if (!tabs.length) {
-    toast("已保留最后一个标签；文件仍在工作区中。");
-    tabs = [id];
+    const blank = createMemoryBuffer(files);
+    files.push(blank);
+    tabs = [blank.id];
   }
   const focusedIndex = Math.max(0, views.indexOf(focused));
   const replacement = tabs[Math.min(tabs.length - 1, closedTabs.at(-1).index)];
@@ -669,30 +670,13 @@ function askName(title, value, action) {
   input.select();
 }
 function newFile() {
-  askName("新建文件", "untitled.js", async (name) => {
-    if (native && workspace) {
-      try {
-        const created = await receiveNative(
-          await native.createFile({
-            workspaceId: workspace.id,
-            relativePath: name,
-            content: "",
-          }),
-          true,
-        );
-        plugins?.event("on_new", { documentId: created.id });
-      } catch (error) {
-        toast("新建失败：" + error.message);
-      }
-      return;
-    }
-    const f = file(uniqueName(name, files), "");
-    files.push(f);
-    activate(f.id);
-    focused.focus();
-    plugins?.event("on_new", { documentId: f.id });
-  });
+  const f = createMemoryBuffer(files);
+  files.push(f);
+  activate(f.id);
+  focused.focus();
+  plugins?.event("on_new", { documentId: f.id });
 }
+
 function rename() {
   const f = current();
   askName("重命名文件", f.name, async (name) => {
@@ -1134,14 +1118,14 @@ function exportWorkspace() {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(
     new Blob(
-      [JSON.stringify({ version: 1, files, active, tabs, settings }, null, 2)],
+      [JSON.stringify({ version: 1, ...captureSession() }, null, 2)],
       { type: "application/json" },
     ),
   );
   a.download = "easy-text-workspace.json";
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  toast("已发起工作区备份下载（所有文件和设置）");
+  toast("已发起工作区备份下载（不含未首次保存的新文档）");
 }
 async function importWorkspace(source) {
   try {
@@ -1252,6 +1236,9 @@ document
     }
   });
 
+document.querySelector(".tab-bar").addEventListener("dblclick", (event) => {
+  if (event.target.matches("#tabs, .tab-bar")) { event.preventDefault(); newFile(); }
+});
 document.addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
@@ -1394,7 +1381,8 @@ document.addEventListener("drop", (e) => {
   e.preventDefault();
   if (!document.querySelector("dialog[open]") && e.dataTransfer.files.length) importFiles([...e.dataTransfer.files]);
 });
-window.addEventListener("beforeunload", () => {
+window.addEventListener("beforeunload", (event) => {
+  if (!native && files.some(f => f.memoryOnly && !f.path && dirty(f))) { event.preventDefault(); event.returnValue = ""; }
   clearTimeout(saveTimer);
   try {
     localStorage.setItem(STORAGE, JSON.stringify(captureSession()));
@@ -1781,6 +1769,11 @@ if (native) {
     }
     if (event.type === "app-close-request") {
       try {
+        if (files.some(f => f.memoryOnly && !f.path && dirty(f))) {
+          await native.closePending();
+          const discard = await appDialogs.confirm({title:"未保存的新文档",message:"新文档仅保存在内存中，退出会丢失未保存的内容。",detail:"选择返回编辑后，可使用保存为新文档选择文件名和路径。",buttons:[{id:"cancel",label:"返回编辑"},{id:"confirm",label:"丢弃并退出"}]});
+          if (!discard) { await native.cancelClose(); return; }
+        }
         await native.saveSession({
           data: captureSession(),
         });

@@ -194,6 +194,7 @@ export function applySaveResult(file, capturedContent, capturedFormat, result) {
     now.bom === capturedFormat.bom;
   Object.assign(file, {
     path: result.path,
+    memoryOnly: false,
     name: result.name,
     revision: result.revision,
     saved: capturedContent,
