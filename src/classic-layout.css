@@ -1,0 +1,25 @@
+/* Final workbench overrides share the compact native editor shell. */
+.pane-heading { display: none; height: 24px; background: #383b31; border-bottom-color: #575d4c; }
+#editors.split .pane-heading { display: flex; }
+.pane-heading select { color: #c1c7b4; }
+.pane-heading select option { background: #383b31; color: #ddd; }
+.pane-heading>span { color: #929a84; }
+.minimap { width: 92px; flex-basis: 92px; border: 0; }
+.workbench-panel { background: #30352a; border-top-color: #717b60; }
+.workbench-heading { border-bottom-color: #59634b; }
+.workbench-heading strong { color: #d4dcc8; }
+.workbench-panel-tabs button { color: #b8c2a8; }
+.workbench-body input:not([type=checkbox]), .workbench-body select { background: #23291e; border-color: #6a7659; color: #d9e1ce; }
+.workbench-body button { border-color: #636f52; border-radius: 2px; }
+.panel-note { color: #b0b9a2; }
+.result-row { border-bottom-color: #48533b !important; }
+.result-row code, .workbench-body pre { color: #bdc9ad; }
+.app-menu { background: #41453c; border-color: #737c67; border-radius: 3px; }
+.app-menu button { color: #dde1d5; }
+.app-menu button:hover, .app-menu button:focus { background: #65734d; }
+.app-menu kbd { color: #bac4ac; }
+#config-dialog { background: #363a30; }
+#config-description { color: #bec6b0; }
+#config-text { background: #24291e; color: #d9e1ce; border-color: #6a7659; }
+.config-actions button[type=submit] { background: #65734d; color: #fff; }
+@media(max-width:700px) { .minimap { width: 62px; flex-basis: 62px; } }
