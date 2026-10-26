@@ -12,6 +12,8 @@
 
 ## 启动与打包
 
+安装包从 [GitHub Releases](https://github.com/fishman-r/easy-text/releases/latest) 下载。当前提供 macOS Apple Silicon DMG，打开后将应用拖到 Applications；本版本尚未签名、公证。
+
 建议使用 Node.js 22 或更新的受支持 LTS。首次安装依赖：
 
 ```sh
@@ -39,6 +41,14 @@ npm run dev -- --port 5173
 ```sh
 npm run package:mac
 ```
+
+生成带 Applications 快捷方式的 DMG 和 SHA-256 校验文件：
+
+```sh
+npm run package:dmg
+```
+
+产物为 `dist-desktop/easy-text-<版本>-macOS-arm64.dmg`。维护者更新版本和 `RELEASE-NOTES.md` 后推送对应 `v<版本>` 标签，GitHub Actions 会执行测试、构建并发布 Release 附件。
 
 产物为 `dist-desktop/easy text-darwin-arm64/easy text.app`。应用尚未签名、公证，没有自动更新服务。打包目标明确为 ARM64；开发 Electron 的架构取决于运行 npm 的 Node 架构，不能用开发窗口启动成功代替最终 `.app` 的验证。
 
