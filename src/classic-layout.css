@@ -50,14 +50,16 @@
 .plugin-compatibility dt { color: #d7e1c9; margin-top: 7px; }
 .plugin-compatibility dd { margin: 2px 0 0; color: #b5c2a5; }
 
-/* Shared rectangular application dialogs; editor file-tab geometry is untouched. */
-dialog { border-radius: 0; background: #363a30; color: #e5e9dc; border: 1px solid #7b826e; padding: 0; max-height: calc(100dvh - 64px); overflow: auto; margin: 32px auto; font-size: 12px; box-shadow: 0 18px 60px #0008; }
+/* Shared rounded application dialogs. */
+:root { --dialog-radius: 12px; --control-radius: 6px; }
+dialog { border-radius: var(--dialog-radius); background: #363a30; color: #e5e9dc; border: 1px solid #7b826e; padding: 0; max-height: calc(100dvh - 64px); overflow: auto; margin: 32px auto; font-size: 12px; box-shadow: 0 18px 60px #0008; }
 dialog::backdrop { background: #10130eb3; }
-dialog *, .app-menu, .workbench-body button, .workbench-body input:not([type=checkbox]), .workbench-body select, #toast { border-radius: 0; }
+dialog :is(button, input, select, textarea, fieldset, .settings-row), .app-menu, .workbench-body button, .workbench-body input:not([type=checkbox]), .workbench-body select, #toast { border-radius: var(--control-radius); }
+dialog .dialog-label { border-radius: calc(var(--dialog-radius) - 1px) calc(var(--dialog-radius) - 1px) 0 0; }
 dialog .dialog-label { position: sticky; top: 0; z-index: 1; background: #41463a; color: #e5e9dc; min-height: 44px; padding: 10px 16px; border-bottom: 1px solid #656d58; font-size: 12px; gap: 12px; }
 dialog .dialog-label label, dialog .dialog-label strong { font-weight: 600; }
 dialog .dialog-label button { margin-left: auto; min-width: 28px; min-height: 28px; padding: 4px; font-size: 12px; }
-dialog :is(input:not([type=checkbox]):not([type=radio]), select, textarea) { border-radius: 0; background: #252b20; color: #f0f3e9; border: 1px solid #7b866a; padding: 8px 10px; font: inherit; min-width: 0; max-width: 100%; }
+dialog :is(input:not([type=checkbox]):not([type=radio]), select, textarea) { border-radius: var(--control-radius); background: #252b20; color: #f0f3e9; border: 1px solid #7b866a; padding: 8px 10px; font: inherit; min-width: 0; max-width: 100%; }
 dialog input[type=checkbox], dialog input[type=radio] { accent-color: #91a76a; }
 dialog button { font: inherit; }
 dialog button:hover { background: #535f42; }
