@@ -1,14 +1,15 @@
+import { COLOR_SCHEMES, resolveColorScheme } from "./color-schemes.js";
 import { normalizeDisplayOptions } from "./display-options.js";
 export function validateEditorPreferences(input) {
   const fontSize = Number(input.fontSize), indentSize = Number(input.indentSize);
   if (!Number.isInteger(fontSize) || fontSize < 10 || fontSize > 24) throw new Error('字号请选择 10 至 24 的整数');
   if (![2, 4, 8].includes(indentSize)) throw new Error('请选择有效的缩进宽度');
-  if (!['dark', 'light'].includes(input.theme)) throw new Error('请选择有效的主题');
+  if (!COLOR_SCHEMES.some(scheme => scheme.id === input.theme)) throw new Error('请选择有效的主题');
   if (!['spaces', 'tabs'].includes(input.indentStyle)) throw new Error('请选择空格或 Tab 缩进');
   if (!['single', 'split'].includes(input.layout)) throw new Error('请选择有效的编辑布局');
   for (const key of ['wrap', 'minimap']) if (typeof input[key] !== 'boolean') throw new Error('显示选项必须为开关');
   const display = normalizeDisplayOptions(input);
-  return { ...display, fontSize, indentSize, light: input.theme === 'light', useTabs: input.indentStyle === 'tabs', split: input.layout === 'split', wrap: input.wrap, minimap: input.minimap };
+  return { ...display, fontSize, indentSize, colorScheme: input.theme, light: !resolveColorScheme({colorScheme:input.theme}).dark, useTabs: input.indentStyle === 'tabs', split: input.layout === 'split', wrap: input.wrap, minimap: input.minimap };
 }
 
 export function validateFilePreferences(input, { allowMixed = false } = {}) {
@@ -25,7 +26,7 @@ export function createPreferences(ctx) {
   dialog.setAttribute('aria-labelledby', 'preferences-title');
   dialog.innerHTML = `<form><div class="dialog-label"><h2 id="preferences-title">设置</h2><button type="button" data-close aria-label="关闭设置">×</button></div>
     <div class="dialog-body"><fieldset><legend>编辑器默认设置</legend><div class="form-grid">
-    <label class="form-field">主题<select name="theme"><option value="dark">深色（Monokai）</option><option value="light">浅色</option></select></label>
+    <label class="form-field">主题<select name="theme">${COLOR_SCHEMES.map(scheme => `<option value="${scheme.id}">${scheme.label}</option>`).join('')}</select></label>
     <label class="form-field">字体大小<input name="fontSize" type="number" min="10" max="24" step="1" required></label>
     <label class="form-field">缩进方式<select name="indentStyle"><option value="spaces">空格</option><option value="tabs">Tab 制表符</option></select></label>
     <label class="form-field">缩进宽度<select name="indentSize"><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></label>
@@ -43,7 +44,7 @@ export function createPreferences(ctx) {
     const display = normalizeDisplayOptions(settings);
     for (const key of ['lineNumbers','showWhitespace','highlightActiveLine']) field(key).checked = display[key];
     field('rulerColumn').value = String(display.rulerColumn);
-    field('theme').value = settings.light ? 'light' : 'dark'; field('fontSize').value = settings.fontSize;
+    field('theme').value = resolveColorScheme(settings).id; field('fontSize').value = settings.fontSize;
     field('indentStyle').value = settings.useTabs ? 'tabs' : 'spaces'; field('indentSize').value = settings.indentSize;
     field('layout').value = settings.split ? 'split' : 'single'; field('wrap').checked = !!settings.wrap; field('minimap').checked = settings.minimap !== false;
     dialog.querySelector('[data-reset-overrides]').hidden = !ctx.hasOverrides();

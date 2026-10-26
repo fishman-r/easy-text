@@ -15,7 +15,9 @@ export function attachMinimap(view, parent) {
     canvas.style.height = height + "px";
     const ctx = canvas.getContext("2d");
     ctx.scale(ratio, ratio);
-    ctx.fillStyle = "#272822";
+    const style = getComputedStyle(view.dom);
+    const color = (key, fallback) => style.getPropertyValue(`--scheme-${key}`).trim() || fallback;
+    ctx.fillStyle = color("bg", "#272822");
     ctx.fillRect(0, 0, width, height);
     const lines = view.state.doc.lines;
     const step = Math.min(3, (height - 12) / Math.max(lines, 1));
@@ -25,10 +27,10 @@ export function attachMinimap(view, parent) {
       const indent = (line.match(/^\s*/)?.[0].length || 0) * 1.2;
       const length = Math.min(80 - indent, line.trim().length * 1.1);
       ctx.fillStyle = /^\s*(\/\/|#|\*)/.test(line)
-        ? "#75715e"
+        ? color("comment", "#75715e")
         : /\b(function|class|const|def|return)\b/.test(line)
-          ? "#66d9ef"
-          : "#a6a69c";
+          ? color("type", "#66d9ef")
+          : color("muted", "#a6a69c");
       if (length > 0)
         ctx.fillRect(
           5 + indent,
@@ -39,7 +41,7 @@ export function attachMinimap(view, parent) {
     }
     const first = view.state.doc.lineAt(view.viewport.from).number;
     const last = view.state.doc.lineAt(view.viewport.to).number;
-    ctx.fillStyle = "#ffffff10";
+    ctx.fillStyle = color("selection", "#ffffff") + "55";
     ctx.fillRect(
       0,
       6 + (first - 1) * step,
@@ -49,7 +51,7 @@ export function attachMinimap(view, parent) {
     const selected = view.state.doc.lineAt(
       view.state.selection.main.head,
     ).number;
-    ctx.fillStyle = "#a6a69c";
+    ctx.fillStyle = color("accent", "#a6a69c");
     ctx.fillRect(0, 6 + (selected - 1) * step, 3, 3);
   }
   canvas.addEventListener("click", (event) => {

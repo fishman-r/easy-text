@@ -16,7 +16,8 @@ import {
   assertPluginSnapshot as validatePluginSnapshot,
 } from "./plugin-transactions.js";
 import { folderNodes } from "./folder-tree.js";
-import { monokai } from "./monokai.js";
+import { colorSchemeExtension, resolveColorScheme } from "./color-schemes.js";
+import { applyShellScheme } from "./theme-shell.js";
 import { restoreSession, normalizeSettings } from "./session-state.js";
 import { installMenus } from "./menus.js";
 import { renderShell } from "./shell.js";
@@ -73,6 +74,7 @@ import { createWorkbench } from "./workbench.js";
 import "./style.css";
 import "./workbench.css";
 import "./classic-layout.css";
+import "./color-schemes.css";
 
 const native = window.easyText || null;
 let workspace = null;
@@ -296,7 +298,7 @@ function effectiveSettings(file) {
 }
 function editorTheme(configuration = settings) {
   return [
-    configuration.light ? [] : monokai,
+    colorSchemeExtension(configuration),
     EditorView.theme({
       "&": { fontSize: configuration.fontSize + "px", height: "100%" },
       ".cm-scroller": {
@@ -891,7 +893,7 @@ async function importFiles(list) {
 }
 function reconfigure() {
   const focusedIndex = Math.max(0, views.indexOf(focused));
-  document.body.classList.toggle("light", settings.light);
+  applyShellScheme(document.body, settings);
   for (const [id, entry] of states) {
     const localSettings = effectiveSettings(
       files.find((file) => file.id === id),
@@ -965,7 +967,8 @@ const commands = [
     "切换浅色 / 深色主题",
     "",
     () => {
-      settings.light = !settings.light;
+      settings.colorScheme = resolveColorScheme(settings).dark ? "light" : "dark";
+      settings.light = !resolveColorScheme(settings).dark;
       reconfigure();
     },
   ],
@@ -1836,7 +1839,7 @@ if (native) {
         workspace = data.workspace;
         restoreViews(data);
         states.clear();
-        document.body.classList.toggle("light", settings.light);
+        applyShellScheme(document.body, settings);
         mount(paneFiles.indexOf(active) === 1 ? 1 : 0);
         renderTabs();
         renderTree();
@@ -1870,7 +1873,7 @@ if (native) {
       persist();
     });
 }
-document.body.classList.toggle("light", settings.light);
+applyShellScheme(document.body, settings);
 mount(paneFiles.indexOf(active) === 1 ? 1 : 0);
 renderTree();
 renderTabs();

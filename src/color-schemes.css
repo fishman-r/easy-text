@@ -1,0 +1,25 @@
+/* Palette overrides preserve the existing geometry and rounded dialog system. */
+body[data-color-scheme]:not([data-color-scheme="dark"]) {
+  background: var(--bg); color: var(--text);
+}
+body[data-color-scheme]:not([data-color-scheme="dark"]) :is(.sidebar,.tab-bar,.pane-heading,.workbench-panel,.app-menu,dialog,#toast,footer) {
+  background: var(--panel); color: var(--text); border-color: var(--line);
+}
+body[data-color-scheme]:not([data-color-scheme="dark"]) :is(.tab,.settings-row,dialog .dialog-label) {
+  background: var(--panel); color: var(--text); border-color: var(--line);
+}
+body[data-color-scheme]:not([data-color-scheme="dark"]) :is(.tab.active,.open-file-row.selected,.tree-file.selected,.palette-row.chosen) {
+  background: var(--scheme-selection); color: var(--text);
+}
+body[data-color-scheme]:not([data-color-scheme="dark"]) :is(.tab.active,.cm-editor) { background: var(--editor); color: var(--text); }
+body[data-color-scheme]:not([data-color-scheme="dark"]) :is(.tree-file,.tree-directory,.project-heading,.open-file-row,.workbench-heading strong,.workbench-panel-tabs button,.app-menu button,.result-row code,.workbench-body pre,.plugin-compatibility dt,footer button,.tab-arrows,.tab-name,.close) { color: var(--text); }
+body[data-color-scheme]:not([data-color-scheme="dark"]) :is(.sidebar-heading,.open-file-close,.tree-disclosure,.document-icon,.pane-heading>span,.panel-note,kbd,small,.settings-empty,.confirmation-detail,.plugin-compatibility dd) { color: var(--muted); }
+body[data-color-scheme]:not([data-color-scheme="dark"]) :is(input:not([type=checkbox]):not([type=radio]),select,textarea,.pane-heading select option) {
+  background: var(--bg); color: var(--text); border-color: var(--line);
+}
+body[data-color-scheme]:not([data-color-scheme="dark"]) :is(button:hover,.tree-file:hover,.tree-directory:hover,.app-menu button:focus) { background: var(--hover); color: var(--text); }
+body[data-color-scheme]:not([data-color-scheme="dark"]) dialog :is(button,fieldset,.settings-row) { border-color: var(--line); }
+body[data-color-scheme]:not([data-color-scheme="dark"]) dialog :is(.primary-button,.primary,.name-confirm,button[type=submit]) { background: var(--scheme-selection); color: var(--text); border-color: var(--accent); }
+body[data-color-scheme]:not([data-color-scheme="dark"]) :is(button,input,select,textarea,a):focus-visible { outline-color: var(--accent); }
+body[data-color-scheme]:not([data-color-scheme="dark"]) :is(input[type=checkbox],input[type=radio]) { accent-color: var(--accent); }
+body.light :is(.form-error,.settings-error) { color: #ac2335; }

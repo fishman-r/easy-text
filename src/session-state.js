@@ -1,3 +1,4 @@
+import { resolveColorScheme } from "./color-schemes.js";
 import { normalizeDisplayOptions } from "./display-options.js";
 import { normalizeLocalePreference } from "./i18n.js";
 import { validSession } from "./core.js";
@@ -23,7 +24,9 @@ export function normalizeSettings(input = {}) {
     settings.languagePreference,
   );
   settings.wrap = settings.wrap === true;
-  settings.light = settings.light === true;
+  const scheme = resolveColorScheme(settings);
+  settings.colorScheme = scheme.id;
+  settings.light = !scheme.dark;
   if (!settings.bookmarks || typeof settings.bookmarks !== "object")
     settings.bookmarks = {};
   for (const [id, positions] of Object.entries(settings.bookmarks))

@@ -84,7 +84,7 @@
 | 按层级/标签属性折叠：D!Main.sublime-menu:240；D!fold.py:83 | 缺失 | 未见层级选择或 HTML 属性折叠操作；普通 foldAll 不等同。 |
 | 软换行、行号、字号、minimap：D!Preferences.sublime-settings:108；D!font.py:5 | 已实现 | `src/preferences.js`、main reconfigure、`src/minimap.js`；字号受 ET 10–24 限制，minimap 是自绘文本概览。 |
 | 标尺、空白字符、缩进线可配置：D!Preferences.sublime-settings:72、198、204 | 部分 | **本轮新增** display-options.js 及 preferences GUI：行号开关、空白显示、活动行高亮、0/80/100/120 列标尺；main 使用独立 display Compartment。选项组合和历史保留单测通过，空白点和 80 列标尺实际绘制、重启后设置持久化已验收；行号/活动行开关组合本轮仅单测。缩进引导线和任意多个标尺仍未实现。 |
-| 主题与配色资源：D!ui.py:7、177 | 部分 | 有深/浅主题，独立 monokai 实现；无完整主题/配色包选择、导入和语法配色兼容。 |
+| 主题与配色资源：D!ui.py:7、177 | 部分 | 0.5.1 新增图形选择七套内置配色及工作区同步配色；无外部主题/配色包导入和 Sublime 语法配色格式兼容。 |
 | 全屏/无干扰/隐藏栏：D!Main.sublime-menu:380、381、386 | 部分 | desktop native-menu 有 togglefullscreen，main 有侧栏开关；未见独立无干扰模式、标签栏/状态栏开关。 |
 
 ## 8. 窗口、分栏与标签
