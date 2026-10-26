@@ -125,7 +125,7 @@
 | 行为 / 原版证据 | 状态 | ET 路径及差距 |
 |---|---|---|
 | 命令面板/GUI 设置/自定义键：D!Default (OSX).sublime-keymap:186；D!settings.py:7 | 部分 | main commands、preferences、settings-forms 均真实接入；键绑定映射自身命令，不兼容 Sublime context/鼠标映射/平台条件全集。GUI 是 ET 产品选择，不要求照搬原版 JSON 编辑流程。 |
-| 宏录制/回放/保存：D!Main.sublime-menu:766 | 部分 | text-tools MacroRecorder 模拟后单事务提交，workbench 持久化最近宏；不是 Sublime 命令宏文件、命名多宏和参数语义兼容。 |
+| 宏录制/回放/保存：D!Main.sublime-menu:766 | 不纳入产品 | 0.5.2 按用户要求移除实现、菜单及快捷键，不再列为待补功能。 |
 | Python 命令和事件：sublime_plugin.py:1076–1105 | 部分 | plugin-manager + python_host + plugin-transactions 有真实进程、事务快照、版本防护与明确 UnsupportedAPI；已验证部分本机 Default 插件见 research/plugin-sample-review.json。无任意插件兼容保证；交互面板、渲染区域、线程回调、native ABI 等仍受限。 |
 | 控制台、资源浏览、语法测试、性能分析：D!ui.py:282；D!profile.py:14；D!run_syntax_tests.py:12 | 缺失 | 插件输出面板不是可执行 Python 控制台；无语法资源浏览/转换、原版语法测试、性能分析完整工具链。 |
 | Package Control 安装：D!install_package_control.py:13 | 不适用 | 不直接复制原产品的安装入口。ET 有可信本地插件来源安装，但不是 Package Control 生态兼容。 |
@@ -148,7 +148,7 @@
 | 关键路径 | REA 地址 / evidence_id | 能确认什么 / ET 对照 |
 |---|---|---|
 | 保存 | `0x10037153a` / `ev_9e14e20c1172f3ae786da730cc22f6ade0c746342ffd1cf5a8122a0e5f4c6944` | 可见受条件控制的去尾空白、EOF 换行，随后 write、回调和 did_write_file 队列。ET saveFile 有独立写入保障，但前述保存整理功能尚缺。不能由该函数推断完整原子保存策略。 |
-| 撤销组 | `0x1003727d2` / `ev_98c3084d05428606e1ddf030a2c2a6156d74928f6b233a2b588fb25c36e7cbc0` | 可见组内动作与依赖文本恢复路径；ET 使用 CodeMirror 历史与宏组合事务，不宣称复制原版内存/压缩布局。 |
+| 撤销组 | `0x1003727d2` / `ev_98c3084d05428606e1ddf030a2c2a6156d74928f6b233a2b588fb25c36e7cbc0` | 可见组内动作与依赖文本恢复路径；ET 使用 CodeMirror 历史事务，不宣称复制原版内存/压缩布局。 |
 | 多选集合 | `0x1003484da` / `ev_9242c96144ad04259cb57990cc1cb4670dce681d11a20b1923a3cd6e7ff54a30` | 可见范围比较和合并路径。ET 使用 EditorSelection/change mapping；端点接触、反向区域等具体等价仍需输入输出差分，静态名称不能证明。 |
 | 模糊评分 | `0x100167844` / `ev_366b93782f6e52b94556ba55a4d81b4d4971ce82f045baf424e2df92af1b33ee` | 有序子序列、位置权重、连续性代价有表达式证据；权重来源与调用者排序未完备取证。ET core.js 自有有界匹配和高亮，不宣称分数等价。 |
 

@@ -34,10 +34,9 @@ import {
   findSymbols,
   lineDiff,
   searchPattern,
-  MacroRecorder,
 } from "./text-tools.js";
 import { EditorState, EditorSelection } from "@codemirror/state";
-import { history, undo } from "@codemirror/commands";
+import { history } from "@codemirror/commands";
 
 test("CRLF and CR normalize without shifting later-line offsets", () => {
   assert.equal(normalizeText("a\r\nb\rc\n"), "a\nb\nc\n");
@@ -60,60 +59,6 @@ test("large line diff does not spread arrays beyond engine argument limit", () =
   assert.equal(rows.filter((row) => row.kind === "remove").length, 130000);
   assert.equal(rows.filter((row) => row.kind === "add").length, 130000);
 });
-function fakeView(doc) {
-  const view = {
-    state: EditorState.create({ doc, extensions: [history()] }),
-    count: 0,
-  };
-  view.dispatch = (transaction) => {
-    view.count++;
-    view.state = transaction.startState
-      ? transaction.state
-      : view.state.update(transaction).state;
-  };
-  return view;
-}
-const selectionFactory = (ranges) =>
-  EditorSelection.create(
-    ranges.map((r) => EditorSelection.range(r.anchor, r.head)),
-  );
-test("macro replay commits all edits once and one undo restores the source", () => {
-  const view = fakeView("z");
-  const macro = new MacroRecorder();
-  macro.events = [
-    {
-      changes: [{ from: 0, to: 0, insert: "x" }],
-      selection: [{ anchor: 1, head: 1 }],
-    },
-    {
-      changes: [{ from: 0, to: 0, insert: "y" }],
-      selection: [{ anchor: 1, head: 1 }],
-    },
-  ];
-  macro.replay(view, selectionFactory);
-  assert.equal(view.state.doc.toString(), "xyz");
-  assert.equal(view.count, 1);
-  undo(view);
-  assert.equal(view.state.doc.toString(), "z");
-});
-test("invalid later macro step leaves document and history untouched", () => {
-  const view = fakeView("z");
-  const macro = new MacroRecorder();
-  macro.events = [
-    {
-      changes: [{ from: 0, to: 0, insert: "x" }],
-      selection: [{ anchor: 1, head: 1 }],
-    },
-    {
-      changes: [{ from: 30, to: 31, insert: "" }],
-      selection: [{ anchor: 1, head: 1 }],
-    },
-  ];
-  assert.throws(() => macro.replay(view, selectionFactory), /越界/);
-  assert.equal(view.state.doc.toString(), "z");
-  assert.equal(view.count, 0);
-});
-
 import { syntaxSymbols, localDefinition } from "./syntax-navigation.js";
 import { javascript } from "@codemirror/lang-javascript";
 test("JS syntax outline ignores declarations inside strings and comments", () => {

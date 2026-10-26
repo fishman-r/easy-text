@@ -46,8 +46,6 @@ const groups = {
     "line.split",
     "text.transpose",
     "snippet.insert",
-    "macro.record",
-    "macro.play",
     "keybindings.edit",
   ],
   view: [
@@ -83,8 +81,6 @@ const groups = {
     "build.panel",
     "git.panel",
     "snippet.insert",
-    "macro.record",
-    "macro.play",
     "plugins.manage",
   ],
   preferences: [

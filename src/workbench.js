@@ -6,12 +6,10 @@ import { dirty } from "./core.js";
 import { syntaxSymbols, localDefinition } from "./syntax-navigation.js";
 import { localSearch } from "./search-client.js";
 import { snippet, hasNextSnippetField, hasPrevSnippetField } from "@codemirror/autocomplete";
-import { EditorSelection } from "@codemirror/state";
 import {
   findSymbols,
   lineDiff,
   searchPattern,
-  MacroRecorder,
 } from "./text-tools.js";
 
 const escapeHTML = (value) =>
@@ -32,9 +30,6 @@ const readSetting = (key, fallback) => {
 
 /** Auxiliary workbench features. Native privileges remain exclusively in preload. */
 export function createWorkbench(ctx) {
-  const recorder = new MacroRecorder();
-  const previous = readSetting("easy-text-macro", []);
-  if (Array.isArray(previous)) recorder.events = previous;
   let snippets = readSetting("easy-text-snippets", [
     {
       name: t("snippetJavaScriptFunction"),
@@ -52,8 +47,9 @@ export function createWorkbench(ctx) {
   snippets = migrateSnippets(snippets);
   let keybindings = readSetting("easy-text-keybindings", {
     "Mod-Shift-o": "symbols",
-    "Mod-Shift-m": "macro.record",
   });
+  // Retired commands must not remain as unavailable entries in the shortcut UI.
+  keybindings = Object.fromEntries(Object.entries(keybindings || {}).filter(([, id]) => !["macro.record", "macro.play"].includes(id)));
   let buildId = null;
   let buildLog = "";
   let diagnosticRows = [];
@@ -481,44 +477,9 @@ export function createWorkbench(ctx) {
     ["snippet.insert", "插入 / 管理代码片段", "", chooseSnippet],
     ["snippet.manage", "管理代码片段", "", () => forms.openSnippets()],
     ["keybindings.edit", "自定义快捷键", "", editKeys],
-    [
-      "macro.record",
-      "开始 / 停止录制编辑宏",
-      "⇧ ⌘ M",
-      () => {
-        if (recorder.recording) {
-          recorder.stop();
-          localStorage.setItem(
-            "easy-text-macro",
-            JSON.stringify(recorder.events),
-          );
-          ctx.toast("宏已保存：" + recorder.events.length + " 步");
-        } else {
-          recorder.start();
-          ctx.toast("正在录制当前编辑操作；再次执行命令停止");
-        }
-        document.querySelector(".status-logo").textContent = recorder.recording
-          ? "● " + t("macroRecording")
-          : "ET";
-      },
-    ],
-    [
-      "macro.play",
-      "回放已录制编辑宏",
-      "",
-      () => {
-        recorder.replay(ctx.view(), (ranges) =>
-          EditorSelection.create(
-            ranges.map((r) => EditorSelection.range(r.anchor, r.head)),
-          ),
-        );
-        ctx.view().focus();
-      },
-    ],
   ].map((c) => [...c.slice(0, 3), safe(c[3])]);
   return {
     commands,
-    observe: (update) => recorder.observe(update),
     search,
     outline,
     diff,

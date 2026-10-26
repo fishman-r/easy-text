@@ -24,5 +24,5 @@ export function renderShell() {
     .map(([a, b]) => `<div><span>${a}</span><kbd>${b}</kbd></div>`)
     .join(
       "",
-    )}</div><p class="help-note">easy text 使用 CodeMirror 6 独立实现编辑。桌面版提供磁盘项目、冲突检测、Git 和构建进程；浏览器版保存为下载。内置宏、代码片段和自定义快捷键；符号扫描不是 LSP，桌面插件管理支持已实现的 Sublime Python API 子集。只加载可信代码，不保证任意插件兼容。</p></dialog>`;
+    )}</div><p class="help-note">easy text 使用 CodeMirror 6 独立实现编辑。桌面版提供磁盘项目、冲突检测、Git 和构建进程；浏览器版保存为下载。内置代码片段和自定义快捷键；符号扫描不是 LSP，桌面插件管理支持已实现的 Sublime Python API 子集。只加载可信代码，不保证任意插件兼容。</p></dialog>`;
 }

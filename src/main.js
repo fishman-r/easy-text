@@ -106,7 +106,7 @@ const initial = [
   file("src/welcome.js", intro),
   file(
     "README.md",
-    "# 欢迎来到 easy text\n\n这是一个使用 CodeMirror 独立实现的代码编辑器。\n\n## 快速开始\n\n- 点击左侧文件开始编辑。\n- 使用「打开」导入 UTF-8 文本文件或目录。\n- Cmd/Ctrl + S 保存当前文件（浏览器版下载）。\n- Cmd/Ctrl + F 打开查找，可开启正则并展开替换。\n- Alt + 点击增加光标；Cmd/Ctrl + D 选择下一处相同文本。\n- 使用视图菜单的分栏布局，在两栏中选择不同文件，也可以共享同一文档。\n\n## 边界\n\n会话在本机自动保存。桌面版支持原路径保存和冲突检测；浏览器版下载备份。\n桌面版提供项目搜索替换、Git 和构建输出。命令面板包含宏、片段、书签和自定义快捷键。桌面插件管理可显式加载可信 Python 插件，支持已实现的 Sublime Python API 子集。没有完整 LSP，也不保证任意插件兼容。\n",
+    "# 欢迎来到 easy text\n\n这是一个使用 CodeMirror 独立实现的代码编辑器。\n\n## 快速开始\n\n- 点击左侧文件开始编辑。\n- 使用「打开」导入 UTF-8 文本文件或目录。\n- Cmd/Ctrl + S 保存当前文件（浏览器版下载）。\n- Cmd/Ctrl + F 打开查找，可开启正则并展开替换。\n- Alt + 点击增加光标；Cmd/Ctrl + D 选择下一处相同文本。\n- 使用视图菜单的分栏布局，在两栏中选择不同文件，也可以共享同一文档。\n\n## 边界\n\n会话在本机自动保存。桌面版支持原路径保存和冲突检测；浏览器版下载备份。\n桌面版提供项目搜索替换、Git 和构建输出。命令面板包含片段、书签和自定义快捷键。桌面插件管理可显式加载可信 Python 插件，支持已实现的 Sublime Python API 子集。没有完整 LSP，也不保证任意插件兼容。\n",
   ),
   file(
     "src/styles.css",
@@ -361,7 +361,6 @@ function createState(f) {
         if (update.docChanged || update.selectionSet)
           target.version =
             (Number.isInteger(target.version) ? target.version : 0) + 1;
-        workbench?.observe(update);
         if (update.docChanged)
           plugins?.event("on_modified", { documentId: id });
         else if (update.selectionSet)
